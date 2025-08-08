@@ -29,7 +29,7 @@ class AppConfig:
         "🏦 Estrutura de Capital": "capital",
         "⏱️ Ciclo Financeiro": "ciclo",
         "🔍 Análise DuPont": "dupont",
-        "🌡️ Visão Geral": "heatmap"
+        "📋 Indicadores Gerais": "indicadores"
     }
     
     @staticmethod

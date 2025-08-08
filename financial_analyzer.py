@@ -524,6 +524,52 @@ class FinancialAnalyzer:
                 'eficiencia': ['Giro do Ativo (GA)', 'Prazo Médio de Renovação dos Estoques (PMRE) ', 'Prazo Médio de Recebimento das Vendas (PMRV) ']
             }
         }
+    def get_indicadores_tabela(self):
+        """Gera tabela consolidada de indicadores com variações ano a ano.
+        Retorna DataFrame com colunas: Indicador, Categoria, Ano Atual, Ano Anterior, Variação Abs, Variação %.
+        Se menos de 2 anos, retorna DataFrame vazio.
+        """
+        import pandas as pd
+        if 'Ano' not in self.df.columns:
+            return pd.DataFrame()
+        anos = sorted(self.df['Ano'].unique())
+        if len(anos) < 2:
+            return pd.DataFrame()
+        ano_ant, ano_atual = anos[-2], anos[-1]
+        row_atual = self.df[self.df['Ano'] == ano_atual].iloc[0]
+        row_ant = self.df[self.df['Ano'] == ano_ant].iloc[0]
+        categorias = {
+            'Liquidez Geral (LG)': 'Liquidez', 'Liquidez Corrente (LC) ': 'Liquidez', 'Liquidez Seca (LS)': 'Liquidez', 'Liquidez Imediata (LI)': 'Liquidez',
+            'Rentabilidade do Patrimônio Líquido (ROE) ': 'Rentabilidade', 'Rentabilidade do Ativo (ROA ou ROI)': 'Rentabilidade', 'Margem Líquida (ML)': 'Rentabilidade', 'Giro do Ativo (GA)': 'Rentabilidade', 'Multiplicador de Alavancagem Financeira (MAF)': 'Rentabilidade', 'Análise do ROI (Método DuPont) ': 'Rentabilidade',
+            'Endividamento Geral (EG)': 'Estrutura/Endividamento', 'Participação de Capitais de Terceiros (PCT) – Grau de Endividamento': 'Estrutura/Endividamento', 'Composição do Endividamento (CE)': 'Estrutura/Endividamento', 'Grau de Imobilização do Patrimônio Líquido (ImPL)': 'Estrutura/Endividamento', 'Grau de Imobilização dos Recursos não Correntes (IRNC) ': 'Estrutura/Endividamento',
+            'Prazo Médio de Renovação dos Estoques (PMRE) ': 'Ciclo Operacional', 'Prazo Médio de Recebimento das Vendas (PMRV) ': 'Ciclo Operacional', 'Prazo Médio de Pagamento das Compras (PMPC) ': 'Ciclo Operacional', 'Ciclo Operacional e Ciclo Financeiro': 'Ciclo Operacional',
+            'Alavancagem Financeira (GAF)': 'Alavancagem', 'Alavancagem Operacional (GAO)': 'Alavancagem', 'Alavancagem Total (GAT) - Cálculo Possível': 'Alavancagem',
+            'Ativo Total': 'Performance / Base', 'Imobilizado': 'Performance / Base', 'Passivo Circulante': 'Performance / Base', 'Passivo Não Circulante': 'Performance / Base', 'Patrimônio Líquido': 'Performance / Base', 'Receita Líquida': 'Performance / Base', 'Lucro Líquido': 'Performance / Base', 'Lucro Operacional': 'Performance / Base', 'Lucro Antes dos Impostos': 'Performance / Base', 'Custo dos Produtos Vendidos (CPV)': 'Performance / Base', 'Caixa e Equivalentes de Caixa': 'Performance / Base', 'Estoques': 'Performance / Base', 'Contas a Receber (Circulante)': 'Performance / Base', 'Fornecedores': 'Performance / Base', 'Realizável a Longo Prazo': 'Performance / Base'
+        }
+        registros = []
+        for col in self.df.columns:
+            if col == 'Ano':
+                continue
+            try:
+                v_at = float(row_atual[col])
+                v_an = float(row_ant[col])
+                var_abs = v_at - v_an
+                var_pct = (var_abs / v_an * 100) if v_an not in (0, None) else None
+                registros.append({
+                    'Indicador': col,
+                    'Categoria': categorias.get(col, 'Outros'),
+                    'Ano Anterior': v_an,
+                    'Ano Atual': v_at,
+                    'Variação Abs': var_abs,
+                    'Variação %': var_pct
+                })
+            except Exception:
+                continue
+        df_out = pd.DataFrame(registros)
+        if df_out.empty:
+            return df_out
+        # Ordenação: categoria depois indicador
+        return df_out.sort_values(['Categoria', 'Indicador']).reset_index(drop=True)
     # ---- LEGACY WRAPPERS (Backward Compatibility) ----
     # Alguns trechos antigos/fallback ainda chamam métodos removidos. 
     # Mantemos aliases para evitar quebras até completa remoção do código legado.
