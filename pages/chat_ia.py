@@ -7,8 +7,9 @@ import streamlit as st
 from pages.base_page import BasePage
 from ai_analyzer import AIAnalyzer
 from datetime import datetime
+import pandas as pd  # pode ser útil para checagens
 
-# Tipos de gráficos financeiros suportados pelo FinancialAnalyzer
+# Tipos de gráficos / visões suportados pelo FinancialAnalyzer
 _FINANCIAL_CHART_DEFS = [
     {
         "id": "rentabilidade",
@@ -41,16 +42,16 @@ _FINANCIAL_CHART_DEFS = [
         "description": "Decomposição da rentabilidade (Margem × Giro × Alavancagem)",
     },
     {
-        "id": "heatmap",
-        "label": "🌡️ Heatmap Indicadores",
-        "builder": "create_heatmap_indicadores",
-        "description": "Mapa de calor normalizado dos principais indicadores",
-    },
-    {
         "id": "evolucao_patrimonial",
         "label": "💰 Evolução Patrimonial",
         "builder": "create_evolucao_patrimonial",
         "description": "Evolução do Ativo, PL e Passivos ao longo do tempo",
+    },
+    {
+        "id": "indicadores",
+        "label": "📋 Indicadores Gerais (Tabela Consolidada)",
+        "builder": "get_indicadores_tabela",
+        "description": "Tabela consolidada de indicadores e variações ano a ano",
     },
 ]
 
@@ -60,7 +61,7 @@ class ChatIAPage(BasePage):
     def __init__(self, df, financial_analyzer):
         super().__init__(df, financial_analyzer)
         self.ai_analyzer = AIAnalyzer()
-        # Inicializa registro de gráficos (apenas financeiros por enquanto)
+        # Inicializa registro de gráficos / visões
         self.chart_registry = self._build_chart_registry()
     
     # --------------------------------------------------
@@ -91,8 +92,8 @@ class ChatIAPage(BasePage):
     # Render Principal
     # --------------------------------------------------
     def render(self):
-        st.title("🤖 Chat com IA - Análise de Gráficos")
-        st.caption("Selecione um gráfico, visualize a miniatura e faça perguntas específicas. A IA responderá contextualizada à visualização escolhida.")
+        st.title("🤖 Chat com IA - Análise de Gráficos / Indicadores")
+        st.caption("Selecione uma visualização (gráfico ou tabela), veja a miniatura e faça perguntas. A IA responderá contextualizada à visão escolhida.")
         st.markdown("---")
         
         if not self.ai_analyzer.is_available():
@@ -107,15 +108,15 @@ class ChatIAPage(BasePage):
     # Seleção e Miniatura
     # --------------------------------------------------
     def _render_chart_selector(self):
-        st.subheader("1️⃣ Seleção do Gráfico")
+        st.subheader("1️⃣ Seleção da Visualização")
         col_sel, col_prev = st.columns([1.2, 1])
         with col_sel:
             options = self._get_chart_options()
             if not options:
-                st.warning("Nenhum gráfico disponível.")
+                st.warning("Nenhuma visualização disponível.")
                 return
             selected_label = st.selectbox(
-                "Selecione um gráfico para análise:",
+                "Selecione para análise:",
                 options,
                 key="ai_chart_select"
             )
@@ -133,21 +134,34 @@ class ChatIAPage(BasePage):
             st.info("Miniatura aparecerá aqui.")
             return
         meta = self.chart_registry.get(chart_id)
+        if not meta:
+            st.warning("Visualização não encontrada.")
+            return
         try:
-            fig = meta["builder"]()
-            # Ajuste para miniatura
-            fig.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10), title=dict(text="", font=dict(size=12)))
+            obj = meta["builder"]()
             st.markdown("**Miniatura**")
-            st.plotly_chart(fig, use_container_width=True)
+            # Caso especial: tabela de indicadores
+            if chart_id == "indicadores":
+                if isinstance(obj, pd.DataFrame) and not obj.empty:
+                    # Mostrar apenas algumas colunas principais para miniatura
+                    cols_show = [c for c in ['Indicador','Categoria','Ano Anterior','Ano Atual','Variação %'] if c in obj.columns]
+                    st.dataframe(obj[cols_show].head(15), use_container_width=True)
+                else:
+                    st.info("Tabela de indicadores vazia ou indisponível.")
+            else:
+                # Assumir Plotly Figure
+                if hasattr(obj, 'update_layout'):
+                    obj.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10), title=dict(text="", font=dict(size=12)))
+                st.plotly_chart(obj, use_container_width=True)
         except Exception as e:
             st.warning(f"Não foi possível gerar miniatura: {e}")
     
     # --------------------------------------------------
-    # Preparação de Dados para IA (por gráfico)
+    # Preparação de Dados para IA (por visualização)
     # --------------------------------------------------
     def _prepare_chart_data(self, chart_id):
         df = self.df
-        data = {"erro": "gráfico não suportado"}
+        data = {"erro": "visualização não suportada"}
         try:
             if chart_id == "rentabilidade":
                 cols = [
@@ -167,17 +181,15 @@ class ChatIAPage(BasePage):
             elif chart_id == "dupont":
                 cols = ['Ano','Margem Líquida (ML)','Giro do Ativo (GA)','Multiplicador de Alavancagem Financeira (MAF)','Rentabilidade do Patrimônio Líquido (ROE) '] 
                 data = df[cols].to_dict('records') if all(c in df.columns for c in cols) else {"erro":"colunas ausentes"}
-            elif chart_id == "heatmap":
-                # Usar subconjunto principal
-                indicadores = [
-                    'Ano','Liquidez Geral (LG)','Liquidez Corrente (LC) ','Endividamento Geral (EG)',
-                    'Margem Líquida (ML)','Rentabilidade do Ativo (ROA ou ROI)',
-                    'Rentabilidade do Patrimônio Líquido (ROE) ','Giro do Ativo (GA)'
-                ]
-                data = df[indicadores].to_dict('records') if all(c in df.columns for c in indicadores) else {"erro":"colunas ausentes"}
             elif chart_id == "evolucao_patrimonial":
                 cols = ['Ano','Ativo Total','Patrimônio Líquido','Passivo Circulante','Passivo Não Circulante']
                 data = df[cols].to_dict('records') if all(c in df.columns for c in cols) else {"erro":"colunas ausentes"}
+            elif chart_id == "indicadores":
+                tabela = self.analyzer.get_indicadores_tabela()
+                if isinstance(tabela, pd.DataFrame) and not tabela.empty:
+                    data = tabela.to_dict('records')
+                else:
+                    data = {"erro": "tabela de indicadores indisponível"}
         except Exception as e:
             data = {"erro": f"falha ao preparar dados: {e}"}
         return data
@@ -191,15 +203,16 @@ class ChatIAPage(BasePage):
     
     def _render_chat_interface(self):
         self._init_chat_state()
-        st.subheader("2️⃣ Pergunte à IA sobre o Gráfico")
+        st.subheader("2️⃣ Pergunte à IA sobre a Visualização")
         chart_id = st.session_state.get('selected_chart_id')
         if not chart_id:
-            st.info("Selecione um gráfico primeiro.")
+            st.info("Selecione algo primeiro.")
             return
         
+        placeholder_ex = "Ex: Quais destaques? Maiores variações? Riscos de liquidez?" if chart_id == 'indicadores' else "Ex: Como evoluiu o ROE? Quais riscos de liquidez aparecem?"
         pergunta = st.text_area(
-            "Sua pergunta sobre o gráfico selecionado:",
-            placeholder="Ex: Como evoluiu o ROE? Quais riscos de liquidez aparecem?",
+            "Sua pergunta:",
+            placeholder=placeholder_ex,
             key="ai_chart_question",
             height=110
         )
@@ -224,7 +237,7 @@ class ChatIAPage(BasePage):
             if not pergunta.strip():
                 st.warning("Digite uma pergunta.")
             else:
-                with st.spinner("IA analisando o gráfico..."):
+                with st.spinner("IA analisando..."):
                     chart_data = self._prepare_chart_data(chart_id)
                     resposta = self.ai_analyzer.generate_chart_insights(
                         chart_data=chart_data,
@@ -255,7 +268,7 @@ class ChatIAPage(BasePage):
                 st.markdown(item['resposta'])
     
     def _export_history_to_markdown(self):
-        lines = ["# Histórico Chat IA (Gráficos)\n"]
+        lines = ["# Histórico Chat IA (Gráficos / Indicadores)\n"]
         for item in st.session_state.ai_graph_chat_history:
             lines.append(f"## {item['ts']} - {item['chart_label']}")
             lines.append(f"**Pergunta:** {item['pergunta']}")
