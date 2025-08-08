@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import os
 from dotenv import load_dotenv
+import numpy as np  # Adicionado para uso em _convert_to_serializable
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -312,6 +313,77 @@ class AIAnalyzer:
         except Exception as e:
             return {"erro": f"Erro no ranking mensal: {str(e)}"}
     
+    def _build_executive_alerts_and_narrative(self, df):
+        """Gera alertas executivos e narrativa resumida a partir do DF financeiro (anos)."""
+        try:
+            if df is None or df.empty or 'Ano' not in df.columns or len(df['Ano'].unique()) < 2:
+                return [], None
+            df_sorted = df.sort_values('Ano')
+            prev, cur = df_sorted.iloc[-2], df_sorted.iloc[-1]
+            ano_prev, ano_cur = int(df_sorted['Ano'].iloc[-2]), int(df_sorted['Ano'].iloc[-1])
+            alerts = []
+            def pct_delta(a,b):
+                try:
+                    return (b-a)/a*100 if a not in (0,None) else None
+                except: return None
+            # Liquidez Corrente
+            if 'Liquidez Corrente (LC) ' in df.columns:
+                lc_cur = cur['Liquidez Corrente (LC) ']
+                if lc_cur < 1.0:
+                    alerts.append({"nivel":"critico","mensagem":f"Liquidez Corrente {lc_cur:.2f} abaixo de 1.0","ano":ano_cur})
+                elif lc_cur < 1.2:
+                    alerts.append({"nivel":"atencao","mensagem":f"Liquidez Corrente {lc_cur:.2f} em zona de atenção (<1.2)","ano":ano_cur})
+            # Liquidez Imediata queda
+            if 'Liquidez Imediata (LI)' in df.columns:
+                li_delta = cur['Liquidez Imediata (LI)'] - prev['Liquidez Imediata (LI)']
+                if li_delta < -0.1:
+                    alerts.append({"nivel":"atencao","mensagem":f"Liquidez Imediata caiu {li_delta:.2f} vs {ano_prev}","ano":ano_cur})
+            # Endividamento Geral
+            if 'Endividamento Geral (EG)' in df.columns:
+                eg_delta_pct = pct_delta(prev['Endividamento Geral (EG)'], cur['Endividamento Geral (EG)'])
+                if eg_delta_pct is not None and eg_delta_pct > 10:
+                    alerts.append({"nivel":"atencao","mensagem":f"Endividamento Geral +{eg_delta_pct:.1f}% vs {ano_prev}","ano":ano_cur})
+            # Margem Líquida queda
+            if 'Margem Líquida (ML)' in df.columns:
+                ml_var_pp = (cur['Margem Líquida (ML)'] - prev['Margem Líquida (ML)'])*100
+                if ml_var_pp < -2:
+                    alerts.append({"nivel":"critico","mensagem":f"Margem Líquida caiu {ml_var_pp:.1f} pp vs {ano_prev}","ano":ano_cur})
+            # ROE queda
+            if 'Rentabilidade do Patrimônio Líquido (ROE) ' in df.columns:
+                roe_var_pp = (cur['Rentabilidade do Patrimônio Líquido (ROE) '] - prev['Rentabilidade do Patrimônio Líquido (ROE) '])*100
+                if roe_var_pp < -3:
+                    alerts.append({"nivel":"critico","mensagem":f"ROE recuou {roe_var_pp:.1f} pp vs {ano_prev}","ano":ano_cur})
+            # Narrativa
+            parts = []
+            def safe_pct(col):
+                if col in df.columns:
+                    try:
+                        return (cur[col]-prev[col])/abs(prev[col])*100 if prev[col] not in (0,None) else None
+                    except: return None
+                return None
+            roe_pct = safe_pct('Rentabilidade do Patrimônio Líquido (ROE) ')
+            ml_pct = safe_pct('Margem Líquida (ML)')
+            eg_pct = safe_pct('Endividamento Geral (EG)')
+            lc_cur = cur['Liquidez Corrente (LC) '] if 'Liquidez Corrente (LC) ' in df.columns else None
+            if roe_pct is not None:
+                direction = 'recuo' if roe_pct < 0 else 'alta'
+                parts.append(f"ROE {direction} {abs(roe_pct):.1f}%")
+            if ml_pct is not None:
+                parts.append(f"Margem {ml_pct:+.1f}%")
+            if eg_pct is not None:
+                if eg_pct > 0:
+                    parts.append(f"Endividamento +{eg_pct:.1f}%")
+                elif eg_pct < 0:
+                    parts.append(f"Endividamento -{abs(eg_pct):.1f}%")
+            if lc_cur is not None:
+                parts.append(f"LC {lc_cur:.2f}")
+            criticos = [a for a in alerts if a['nivel']=='critico']
+            if criticos:
+                parts.append(f"{len(criticos)} alerta(s) crítico(s)")
+            narrativa = "; ".join(parts)+"." if parts else None
+            return alerts, narrativa
+        except Exception:
+            return [], None
     def prepare_data_context(self, df, df_filtrado, kpis):
         """
         Prepara o contexto dos dados para a IA com análise temporal detalhada
@@ -409,7 +481,12 @@ class AIAnalyzer:
                 "kpis_atuais": kpis_atuais,
                 "dados_filtrados": dados_filtrados
             }
-            
+            # Adicionar alertas e narrativa executiva se aplicável
+            alerts, narrativa = self._build_executive_alerts_and_narrative(df_filtrado if 'Ano' in df_filtrado.columns else df)
+            if alerts:
+                context["executive_alerts"] = alerts
+            if narrativa:
+                context["executive_narrative"] = narrativa
             return context
             
         except Exception as e:
@@ -463,81 +540,16 @@ class AIAnalyzer:
         CONTEXTO DOS DADOS:
         {json.dumps(context, indent=2, ensure_ascii=False)}
 
-        INSTRUÇÕES PARA ANÁLISE AVANÇADA:
-        
-        1. ANÁLISE TEMPORAL DETALHADA:
-           - Identifique o mês com maior receita e explique possíveis causas
-           - Analise tendências de crescimento ou declínio
-           - Compare períodos (mês a mês, trimestre a trimestre)
-           - Identifique sazonalidade nos dados
-        
-        2. ANÁLISE DE PERFORMANCE:
-           - Calcule e explique variações percentuais
-           - Identifique pontos de inflexão importantes
-           - Compare receitas vs despesas por período
-           - Analise eficiência operacional
-        
-        3. ANÁLISE CATEGORIAL:
-           - Identifique categorias com maior impacto
-           - Encontre oportunidades de otimização
-           - Destaque categorias em crescimento ou declínio
-           - Sugira redistribuição de recursos
-        
-        4. INSIGHTS ESTRATÉGICOS:
-           - Forneça recomendações específicas baseadas nos padrões identificados
-           - Identifique riscos e oportunidades
-           - Sugira ações para melhorar performance
-           - Proponha métricas para acompanhamento
-        
-        5. ALERTAS E PONTOS DE ATENÇÃO:
-           - Identifique anomalias ou padrões preocupantes
-           - Destaque meses com performance abaixo do esperado
-           - Alerte sobre concentração excessiva em categorias específicas
-
-        FORMATO DA RESPOSTA OBRIGATÓRIO:
-        Sua resposta DEVE seguir esta estrutura formatada e ser CONCISA:
-        
-        ## 📊 **RESUMO EXECUTIVO**
-        > _(3-4 bullet points principais)_
-        
-        ## 📅 **ANÁLISE TEMPORAL**
-        - **Período de melhor performance:** [Mês/Ano]
-        - **Tendência:** [Crescimento/Estagnação/Declínio]
-        - **Sazonalidade:** [Padrão identificado]
-        
-        ## 📈 **PERFORMANCE FINANCEIRA**
-        • **Receita total:** R$ XXX
-        • **Despesa total:** R$ XXX  
-        • **Margem:** XX%
-        
-        ## 🎯 **INSIGHTS ESTRATÉGICOS**
-        1. [Insight chave 1]
-        2. [Insight chave 2]
-        3. [Insight chave 3]
-        
-        ## ⚠️ **ALERTAS CRÍTICOS**
-        ⚠️ _[Máximo 2 alertas importantes]_
-        
-        ## 📋 **PRÓXIMOS PASSOS**
-        ✅ [Ação 1]  
-        ✅ [Ação 2]  
-        ✅ [Ação 3]
-
-        REGRAS DE FORMATAÇÃO:
-        - Use bullet points e emojis para melhor legibilidade
-        - Seja CONCISO - máximo 2-3 linhas por item
-        - Sempre cite valores específicos com "R$"
-        - Use negrito para destacar números importantes
-        - Mantenha estrutura visual clara com espaçamento
-        """
-        
+        SE HOUVER 'executive_alerts' PRIORIZE EXPLICAR ESTRATEGICAMENTE CADA ALERTA.
+        INCORPORE A 'executive_narrative' COMO BASE PARA O RESUMO EXECUTIVO, REFINANDO E COMPLEMENTANDO-A.
+        """ + prompt.split('INSTRUÇÕES PARA ANÁLISE AVANÇADA:')[1]
         return prompt
     
     def _build_question_prompt(self, context, question):
         """
         Constrói prompt para responder perguntas específicas do usuário
         """
-        prompt = f"""
+        base = f"""
         Você é um assistente especializado em análise de dados contábeis e temporais.
         Responda à pergunta do usuário baseando-se nos dados fornecidos.
 
@@ -547,139 +559,100 @@ class AIAnalyzer:
         CONTEXTO DOS DADOS COMPLETO:
         {json.dumps(context, indent=2, ensure_ascii=False)}
 
-        INSTRUÇÕES PARA RESPOSTA ESTRUTURADA:
-        
-        ## 💡 **RESPOSTA DIRETA**
-        _(Resposta específica à pergunta em 2-3 linhas)_
-        
-        ## 📊 **DADOS RELEVANTES**
-        • **Valores principais:** [Números específicos]
-        • **Período analisado:** [Datas]
-        • **Comparações:** [Se aplicável]
-        
-        ## 🔍 **ANÁLISE DETALHADA**
-        - [Insight 1 com justificativa]
-        - [Insight 2 com justificativa]
-        - [Insight 3 com justificativa]
-        
-        ## 📈 **CONTEXTO ADICIONAL**
-        > _Explicação de possíveis causas ou implicações_
-        
-        ## ✅ **RECOMENDAÇÕES**
-        1. [Ação sugerida 1]
-        2. [Ação sugerida 2]
-
-        REGRAS DE FORMATAÇÃO:
-        1. SEMPRE use a estrutura acima
-        2. Seja CONCISO - máximo 2-3 linhas por seção
-        3. Use bullet points e emojis para clareza
-        4. Cite valores específicos com "R$" quando aplicável
-        5. Mantenha visual limpo com espaçamento
-        6. Se não houver dados suficientes, indique na seção "Dados Relevantes"
-        7. Para perguntas sobre períodos, use dados de "analise_temporal"
-        8. Para rankings, use "ranking_mensal" 
-        9. Sempre mencione meses por extenso (ex: "Janeiro de 2024")
-
-        Responda em português brasileiro de forma clara e sempre fundamentada nos dados.
+        SE EXISTIREM ALERTAS (executive_alerts) RESPONDA CONSIDERANDO PRIORIDADE DE RISCO.
+        USE A NARRATIVA EXECUTIVA (executive_narrative) COMO ENQUADRAMENTO INICIAL.
         """
-        
-        return prompt
+        rest = self._build_question_prompt.__wrapped__(self, context, question) if hasattr(self._build_question_prompt, '__wrapped__') else ""
+        # Mantém estrutura original após instruções iniciais
+        return base + "\n" + rest.split('INSTRUÇÕES PARA RESPOSTA ESTRUTURADA:')[1]
     
-    def generate_chart_insights(self, chart_data, chart_type, df_filtrado=None, custom_question=None):
+    def _convert_alerts_to_text(self, alerts):
         """
-        Gera insights específicos sobre gráficos com análise visual avançada
+        Converte a lista de alertas em texto formatado para exibição
         """
-        if not self.is_available():
-            return "IA não disponível."
+        if not alerts:
+            return "Nenhum alerta crítico."
         
+        alertas_texto = []
+        for alerta in alerts:
+            if alerta['nivel'] == 'critico':
+                alertas_texto.append(f"⚠️ **Crítico:** {alerta['mensagem']} (Ano: {alerta['ano']})")
+            elif alerta['nivel'] == 'atencao':
+                alertas_texto.append(f"⚠️ **Atenção:** {alerta['mensagem']} (Ano: {alerta['ano']})")
+        
+        return "\n".join(alertas_texto)
+    
+    def _prepare_temporal_context(self, df):
+        """
+        Prepara contexto temporal para análise detalhada
+        """
         try:
-            # Preparar dados do gráfico
-            serializable_data = self._convert_to_serializable(chart_data)
+            if df is None or df.empty:
+                return {}
             
-            # Preparar contexto adicional se DataFrame fornecido
-            additional_context = ""
-            if df_filtrado is not None and not df_filtrado.empty:
-                context = self._prepare_chart_context(df_filtrado, chart_type)
-                additional_context = f"\n\nCONTEXTO ADICIONAL:\n{json.dumps(context, indent=2, ensure_ascii=False)}"
+            # Agrupar por ano e mês
+            df_temp = df.copy()
+            df_temp['Ano'] = df_temp['Data'].dt.year
+            df_temp['Mes'] = df_temp['Data'].dt.month
+            df_temp['Mes_Ano'] = df_temp['Data'].dt.strftime('%m/%Y')
             
-            # Construir prompt baseado se há pergunta customizada
-            if custom_question:
-                prompt = self._build_chart_question_prompt(serializable_data, chart_type, custom_question, additional_context)
-            else:
-                prompt = self._build_chart_analysis_prompt(serializable_data, chart_type, additional_context)
+            # Calcular totais por mês
+            totais_mensais = df_temp.groupby('Mes_Ano')['Valor'].sum().reset_index()
+            totais_mensais['Tipo'] = 'Total'
             
-            response = self.model.generate_content(prompt)
-            return response.text
+            # Calcular totais por ano
+            totais_anuais = df_temp.groupby('Ano')['Valor'].sum().reset_index()
+            totais_anuais['Mes_Ano'] = totais_anuais['Ano'].astype(str)
+            totais_anuais['Tipo'] = 'Total'
+            
+            # Combinar totais mensais e anuais
+            contexto_temporal = pd.concat([totais_mensais, totais_anuais], ignore_index=True, sort=False)
+            
+            return contexto_temporal
             
         except Exception as e:
-            return f"Erro ao analisar gráfico: {str(e)}"
+            return {"erro": f"Erro ao preparar contexto temporal: {str(e)}"}
     
-    def _build_chart_analysis_prompt(self, chart_data, chart_type, additional_context=""):
+    def _prepare_categorical_context(self, df):
         """
-        Constrói prompt para análise automática de gráfico
+        Prepara contexto categorial para análise detalhada
         """
-        return f"""
-        Você é um especialista em análise de dados e visualização.
-        Analise detalhadamente os dados do gráfico e forneça insights avançados.
-
-        TIPO DE GRÁFICO: {chart_type}
-        DADOS DO GRÁFICO: {json.dumps(chart_data, indent=2, ensure_ascii=False)}
-        {additional_context}
-
-        Para sua análise, considere:
-
-        1. INTERPRETAÇÃO VISUAL:
-           - Padrões visuais evidentes
-           - Tendências e variações
-           - Pontos de inflexão importantes
-           - Comparações entre categorias/períodos
-
-        2. INSIGHTS QUANTITATIVOS:
-           - Valores máximos e mínimos
-           - Variações percentuais
-           - Distribuições
-           - Correlações aparentes
-
-        3. INSIGHTS ESTRATÉGICOS:
-           - Oportunidades identificadas
-           - Riscos ou alertas
-           - Recomendações baseadas nos dados
-           - Próximos passos sugeridos
-
-        4. CONTEXTO TEMPORAL (se aplicável):
-           - Sazonalidade
-           - Crescimento ou declínio
-           - Ciclos identificados
-           - Previsões de curto prazo
-
-        Forneça uma análise estruturada e detalhada em português brasileiro.
-        Seja específico com números e percentuais quando relevante.
-        """
+        try:
+            if df is None or df.empty:
+                return {}
+            
+            # Agrupar por categoria e tipo
+            df_temp = df.copy()
+            df_temp['Tipo'] = df_temp['Tipo'].astype(str)
+            
+            contexto_categorial = df_temp.groupby(['Categoria', 'Tipo'])['Valor'].sum().reset_index()
+            
+            return contexto_categorial
+            
+        except Exception as e:
+            return {"erro": f"Erro ao preparar contexto categorial: {str(e)}"}
     
-    def _build_chart_question_prompt(self, chart_data, chart_type, custom_question, additional_context=""):
+    def _prepare_trend_context(self, df):
         """
-        Constrói prompt para responder pergunta específica sobre gráfico
+        Prepara contexto para análise de tendências
         """
-        return f"""
-        Você é um especialista em análise de dados financeiros e visualização.
-        
-        CONTEXTO:
-        - Tipo de gráfico: {chart_type}
-        - Dados do gráfico: {json.dumps(chart_data, indent=2, ensure_ascii=False)}
-        {additional_context}
-        
-        PERGUNTA DO USUÁRIO: {custom_question}
-        
-        INSTRUÇÕES:
-        1. Responda especificamente à pergunta do usuário
-        2. Use os dados do gráfico como base para sua resposta
-        3. Seja preciso com números e percentuais
-        4. Forneça insights acionáveis quando possível
-        5. Se a pergunta não puder ser respondida com os dados disponíveis, explique claramente o motivo
-        6. Mantenha foco no gráfico específico selecionado
-        
-        Responda em português brasileiro de forma clara e estruturada.
-        """
+        try:
+            if df is None or df.empty:
+                return {}
+            
+            # Ordenar por data
+            df_sorted = df.sort_values('Data')
+            
+            # Calcular variação percentual mensal
+            df_sorted['Variação Percentual'] = df_sorted.groupby('Tipo')['Valor'].pct_change() * 100
+            
+            # Filtrar apenas meses com dados
+            contexto_tendencia = df_sorted.dropna(subset=['Variação Percentual'])
+            
+            return contexto_tendencia
+            
+        except Exception as e:
+            return {"erro": f"Erro ao preparar contexto de tendência: {str(e)}"}
     
     def _prepare_chart_context(self, df_filtrado, chart_type):
         """
@@ -746,6 +719,71 @@ class AIAnalyzer:
             
         except Exception as e:
             return {"erro": f"Erro ao preparar contexto do gráfico: {str(e)}"}
+    
+    def generate_chart_insights(self, chart_data, chart_type, df_filtrado=None, custom_question=None):
+        """Gera insights ou responde pergunta sobre um gráfico/tabela específico.
+
+        Args:
+            chart_data (dict|list): Dados preparados da visualização.
+            chart_type (str): Identificador (ex: 'rentabilidade', 'liquidez', 'indicadores').
+            df_filtrado (pd.DataFrame, opcional): DataFrame para gerar alertas/narrativa.
+            custom_question (str, opcional): Pergunta do usuário. Se None gera análise padrão.
+        """
+        if not self.is_available():
+            return "IA não disponível. Configure a API key."
+        try:
+            serial_chart = self._convert_to_serializable(chart_data)
+            alerts, narrativa = ([], None)
+            if isinstance(df_filtrado, pd.DataFrame) and not df_filtrado.empty:
+                alerts, narrativa = self._build_executive_alerts_and_narrative(df_filtrado)
+            alerts_texto = "; ".join([f"[{a['nivel'].upper()}] {a['mensagem']}" for a in alerts]) if alerts else "Nenhum alerta relevante."
+            base_context_json = json.dumps({
+                "chart_type": chart_type,
+                "chart_data": serial_chart,
+                "executive_alerts": alerts,
+                "executive_narrative": narrativa
+            }, indent=2, ensure_ascii=False)
+            if custom_question:
+                prompt = f"""
+Você é um analista financeiro sênior. Responda de forma objetiva e executiva à pergunta sobre a visualização selecionada.
+
+TIPO DE VISUALIZAÇÃO: {chart_type}
+ALERTAS EXECUTIVOS: {alerts_texto}
+NARRATIVA EXECUTIVA (se houver): {narrativa if narrativa else 'N/A'}
+DADOS DA VISUALIZAÇÃO (JSON):
+{base_context_json}
+
+PERGUNTA DO USUÁRIO:
+{custom_question}
+
+INSTRUÇÕES:
+1. Se existirem alertas críticos, trate-os primeiro.
+2. Cite números/chaves relevantes do chart_data (não invente valores).
+3. Forneça implicações estratégicas.
+4. Termine com 1-2 recomendações práticas.
+Responda em português brasileiro, formato conciso.
+"""
+            else:
+                prompt = f"""
+Você é um analista financeiro sênior. Gere uma análise executiva da visualização.
+
+TIPO DE VISUALIZAÇÃO: {chart_type}
+ALERTAS EXECUTIVOS: {alerts_texto}
+NARRATIVA EXECUTIVA (se houver): {narrativa if narrativa else 'N/A'}
+DADOS DA VISUALIZAÇÃO (JSON):
+{base_context_json}
+
+Produza:
+- Resumo objetivo (1 frase)
+- 2-4 destaques quantitativos
+- Riscos / atenções (se houver)
+- Próxima ação recomendada
+Responda em português brasileiro.
+"""
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Erro na análise do gráfico: {e}"
     
     def analyze_all_charts(self, df, df_filtrado, kpis):
         """
@@ -1216,4 +1254,4 @@ def analyze_chart_with_ai(chart_data, chart_type, chart_title):
         return insights
     except Exception as e:
         st.error(f"Erro na análise do gráfico: {str(e)}")
-        return None 
+        return None

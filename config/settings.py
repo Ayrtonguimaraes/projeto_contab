@@ -23,12 +23,7 @@ class AppConfig:
     # Navegação reorganizada para evidenciar o Chat com IA como funcionalidade central
     NAVIGATION = {
         "🏠 Dashboard Executivo": "dashboard",
-        "🤖 Chat com IA": "ai_chat",  # Destacado logo após o dashboard
-        "📈 Análise de Rentabilidade": "rentabilidade", 
-        "🛡️ Análise de Liquidez": "liquidez",
-        "🏦 Estrutura de Capital": "capital",
-        "⏱️ Ciclo Financeiro": "ciclo",
-        "🔍 Análise DuPont": "dupont",
+        "🤖 Chat com IA": "ai_chat",
         "📋 Indicadores Gerais": "indicadores"
     }
     

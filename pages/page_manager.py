@@ -3,12 +3,7 @@ Gerenciador central de páginas
 """
 
 from pages.dashboard_executivo import DashboardExecutivoPage
-from pages.analise_rentabilidade import AnaliseRentabilidadePage
 from pages.chat_ia import ChatIAPage
-from pages.analise_liquidez import AnaliseLiquidezPage
-from pages.estrutura_capital import EstruturaCapitalPage
-from pages.ciclo_financeiro import CicloFinanceiroPage
-from pages.analise_dupont import AnaliseDupontPage
 from pages.indicadores_gerais import IndicadoresGeraisPage
 
 class PageManager:
@@ -19,15 +14,10 @@ class PageManager:
         self._register_pages()
     
     def _register_pages(self):
-        """Registra todas as páginas disponíveis"""
+        """Registra páginas disponíveis (pós-unificação)"""
         self.pages = {
             "dashboard": DashboardExecutivoPage,
             "ai_chat": ChatIAPage,
-            "rentabilidade": AnaliseRentabilidadePage,
-            "liquidez": AnaliseLiquidezPage,
-            "capital": EstruturaCapitalPage,
-            "ciclo": CicloFinanceiroPage,
-            "dupont": AnaliseDupontPage,
             "indicadores": IndicadoresGeraisPage,
         }
         try:
@@ -40,19 +30,7 @@ class PageManager:
             print(f"[PageManager] get_page_class chamado para: {page_key}")
         except Exception:
             pass
-        page_class = self.pages.get(page_key)
-        if page_class is None and page_key == 'indicadores':
-            try:
-                print("[PageManager] 'indicadores' ausente, tentando recarregar módulo...")
-                from importlib import reload
-                import pages.indicadores_gerais as indicadores_mod
-                reload(indicadores_mod)
-                self.pages['indicadores'] = indicadores_mod.IndicadoresGeraisPage
-                page_class = self.pages.get(page_key)
-                print("[PageManager] Após reload, chaves:", list(self.pages.keys()))
-            except Exception as e:
-                print("[PageManager] Falha reload indicadores:", e)
-        return page_class
+        return self.pages.get(page_key)
     
     def render_page(self, page_key, df, financial_analyzer):
         page_class = self.get_page_class(page_key)
