@@ -63,6 +63,12 @@ def _calc_delta(atual, anterior):
 def criar_sidebar(df, analyzer):
     """Cria sidebar apenas com filtros, resumo e exportação (sem KPIs)."""
     st.sidebar.title("🏢 Análise Financeira")
+    # Toggle modo simplificado (afeta páginas de gráficos)
+    st.sidebar.checkbox(
+        "Modo simplificado de gráficos",
+        key="modo_simplificado",
+        help="Exibe versões resumidas (tabelas/deltas) quando disponível para poucos anos"
+    )
 
     if df is None or df.empty:
         st.sidebar.error("❌ Nenhum dado disponível")

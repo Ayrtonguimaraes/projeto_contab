@@ -25,6 +25,7 @@ class AIAnalyzer:
         self.model_name = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
         self.max_tokens = int(os.getenv('MAX_TOKENS', 4096))
         self.temperature = float(os.getenv('TEMPERATURE', 0.7))
+        self.detail_level = os.getenv('LLM_DETAIL_LEVEL', 'balanced').lower()
         
         if self.api_key:
             genai.configure(api_key=self.api_key)
@@ -529,42 +530,98 @@ class AIAnalyzer:
         except Exception as e:
             return f"Erro ao gerar insights: {str(e)}"
     
+    # ===================== PROMPT TEMPLATES REFACTORED =====================
+    def _select_detail_config(self):
+        mapping = {
+            'curto': {'bullets_destaques': 3, 'bullets_riscos': 2, 'bullets_acoes': 2, 'max_sections': 5},
+            'balanced': {'bullets_destaques': 5, 'bullets_riscos': 3, 'bullets_acoes': 3, 'max_sections': 6},
+            'detalhado': {'bullets_destaques': 8, 'bullets_riscos': 5, 'bullets_acoes': 5, 'max_sections': 7}
+        }
+        return mapping.get(self.detail_level, mapping['balanced'])
+
+    def _format_context_compact(self, context: dict):
+        """Reduz o contexto antes de enviar ao LLM (remove listas muito grandes)."""
+        import copy
+        ctx = copy.deepcopy(context)
+        # Limitar top listas
+        def trim_list(lst, n=10):
+            return lst[:n] if isinstance(lst, list) and len(lst) > n else lst
+        # Exemplos de cortes
+        if isinstance(ctx.get('dados_filtrados'), dict):
+            dfilt = ctx['dados_filtrados']
+            for k in ['top_receitas','top_despesas','ranking_mensal']:
+                if k in dfilt:
+                    dfilt[k] = trim_list(dfilt[k], 5)
+        return ctx
+
     def _build_insights_prompt(self, context):
-        """
-        Constrói prompt para geração automática de insights
-        """
+        cfg = self._select_detail_config()
+        ctx_compact = self._format_context_compact(context)
         prompt = f"""
-        Você é um analista financeiro sênior especializado em análise de dados contábeis e temporais. 
-        Analise os dados fornecidos e gere insights valiosos em português brasileiro.
+Você é um analista financeiro sênior. Gere análise EXECUTIVA com profundidade equilibrada.
+LÍNGUA: Português brasileiro.
+FORMATO: Markdown estruturado.
+NÍVEL DE DETALHE: {self.detail_level}.
 
-        CONTEXTO DOS DADOS:
-        {json.dumps(context, indent=2, ensure_ascii=False)}
+DADOS (JSON resumido):
+{json.dumps(ctx_compact, indent=2, ensure_ascii=False)}
 
-        SE HOUVER 'executive_alerts' PRIORIZE EXPLICAR ESTRATEGICAMENTE CADA ALERTA.
-        INCORPORE A 'executive_narrative' COMO BASE PARA O RESUMO EXECUTIVO, REFINANDO E COMPLEMENTANDO-A.
-        """ + prompt.split('INSTRUÇÕES PARA ANÁLISE AVANÇADA:')[1]
+INSTRUÇÕES GERAIS:
+1. Se existirem executive_alerts, iniciar explicando-os em ordem de criticidade.
+2. Usar executive_narrative como base, mas expandir com números objetivos (não inventar).
+3. Citar métricas com valores e variações (pp ou %), sempre indicar unidade (% / vezes / R$ se aplicável).
+4. Não repetir exatamente o mesmo valor em seções diferentes sem nova interpretação.
+5. Se algum dado essencial estiver ausente, declarar 'dado não disponível'.
+6. Evitar floreios; foco em implicações.
+
+ESTRUTURA (não adicionar seções extras):
+## 📌 Resumo Executivo (3-4 frases)
+## 🔔 Alertas Críticos (se houver)
+## 📊 Destaques Quantitativos (até {cfg['bullets_destaques']} bullets)
+## ⚠️ Riscos / Pressões (até {cfg['bullets_riscos']} bullets)
+## 🚀 Oportunidades / Eficiências (2-3 bullets)
+## 🎯 Ações Prioritárias (até {cfg['bullets_acoes']} bullets com verbo inicial)
+## 🧪 Observações / Limitações (1-2 bullets se necessário)
+
+REGRAS DE NUMERAIS:
+- Percentuais: 1 casa (ex: 12,3%).
+- Diferença percentual absoluta: usar 'pp' quando for diferença de margens/ROE.
+- Valores monetários: se houver (R$), sem casas decimais, milhar com ponto.
+
+RESPONDA APENAS COM A ANÁLISE.
+"""
         return prompt
-    
+
     def _build_question_prompt(self, context, question):
-        """
-        Constrói prompt para responder perguntas específicas do usuário
-        """
-        base = f"""
-        Você é um assistente especializado em análise de dados contábeis e temporais.
-        Responda à pergunta do usuário baseando-se nos dados fornecidos.
+        cfg = self._select_detail_config()
+        ctx_compact = self._format_context_compact(context)
+        prompt = f"""
+Você é um analista financeiro sênior. Responda a PERGUNTA específica de forma objetiva porém com substância.
+LÍNGUA: Português brasileiro.
+NÍVEL DE DETALHE: {self.detail_level}.
 
-        PERGUNTA DO USUÁRIO:
-        {question}
+PERGUNTA:
+{question}
 
-        CONTEXTO DOS DADOS COMPLETO:
-        {json.dumps(context, indent=2, ensure_ascii=False)}
+DADOS (JSON resumido):
+{json.dumps(ctx_compact, indent=2, ensure_ascii=False)}
 
-        SE EXISTIREM ALERTAS (executive_alerts) RESPONDA CONSIDERANDO PRIORIDADE DE RISCO.
-        USE A NARRATIVA EXECUTIVA (executive_narrative) COMO ENQUADRAMENTO INICIAL.
-        """
-        rest = self._build_question_prompt.__wrapped__(self, context, question) if hasattr(self._build_question_prompt, '__wrapped__') else ""
-        # Mantém estrutura original após instruções iniciais
-        return base + "\n" + rest.split('INSTRUÇÕES PARA RESPOSTA ESTRUTURADA:')[1]
+INSTRUÇÕES:
+1. Se a pergunta se relacionar a métricas presentes em executive_alerts, priorize riscos primeiro.
+2. Limitar a resposta a 3-5 parágrafos curtos OU uma combinação de parágrafos + lista (máx {cfg['bullets_destaques']} bullets totais).
+3. Sempre que citar variação, qualificar (ex: 'ROE caiu 3,2 pp vs ano anterior').
+4. Se a pergunta pedir comparação temporal e só houver 2 anos, explicitar limitação.
+5. Encerrar (última linha) com '➡️ Próximo passo:' e uma recomendação acionável.
+6. Não inventar métricas inexistentes; se não encontrado, dizer explicitamente.
+
+FORMATO:
+- Parágrafo inicial direto respondendo.
+- Lista (se pertinente) com evidências numéricas.
+- Conclusão estratégica + próximo passo.
+
+RESPONDA APENAS COM O CONTEÚDO SOLICITADO.
+"""
+        return prompt
     
     def _convert_alerts_to_text(self, alerts):
         """
