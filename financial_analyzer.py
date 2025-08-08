@@ -524,3 +524,14 @@ class FinancialAnalyzer:
                 'eficiencia': ['Giro do Ativo (GA)', 'Prazo Médio de Renovação dos Estoques (PMRE) ', 'Prazo Médio de Recebimento das Vendas (PMRV) ']
             }
         }
+    # ---- LEGACY WRAPPERS (Backward Compatibility) ----
+    # Alguns trechos antigos/fallback ainda chamam métodos removidos. 
+    # Mantemos aliases para evitar quebras até completa remoção do código legado.
+    def create_liquidez_chart(self):
+        return self.create_liquidez_radar()
+    def create_endividamento_chart(self):
+        return self.create_estrutura_capital()
+    def create_ciclo_chart(self):
+        return self.create_ciclo_financeiro()
+    def create_heatmap_geral(self):
+        return self.create_heatmap_indicadores()
