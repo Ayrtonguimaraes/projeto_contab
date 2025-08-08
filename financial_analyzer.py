@@ -581,3 +581,131 @@ class FinancialAnalyzer:
         return self.create_ciclo_financeiro()
     def create_heatmap_geral(self):
         return self.create_heatmap_indicadores()
+    
+    # ---- MÉTODOS MELHORADOS PARA MINIATURAS ----
+    # Versões simplificadas dos gráficos melhorados do dashboard executivo
+    
+    def create_rentabilidade_melhorado(self):
+        """Waterfall DuPont simplificado para miniatura"""
+        df = self.df.sort_values('Ano')
+        if len(df) < 2:
+            return self.create_rentabilidade_chart()  # Fallback
+            
+        required = ['Margem Líquida (ML)','Giro do Ativo (GA)','Multiplicador de Alavancagem Financeira (MAF)','Rentabilidade do Patrimônio Líquido (ROE) ']
+        if not all(c in df.columns for c in required):
+            return self.create_rentabilidade_chart()  # Fallback
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        ml1, ml2 = prev[required[0]], cur[required[0]]
+        ga1, ga2 = prev[required[1]], cur[required[1]]
+        maf1, maf2 = prev[required[2]], cur[required[2]]
+        roe1, roe2 = prev[required[3]], cur[required[3]]
+        
+        # Aproximação simples da contribuição
+        delta_roe_pp = (roe2 - roe1) * 100
+        contrib_ml = (ml2 - ml1) / ml1 * 100 if ml1 != 0 else 0
+        contrib_ga = (ga2 - ga1) / ga1 * 100 if ga1 != 0 else 0  
+        contrib_maf = (maf2 - maf1) / maf1 * 100 if maf1 != 0 else 0
+        
+        total_contrib = abs(contrib_ml) + abs(contrib_ga) + abs(contrib_maf) or 1
+        values = [
+            delta_roe_pp * (abs(contrib_ml)/total_contrib) * (1 if contrib_ml >= 0 else -1),
+            delta_roe_pp * (abs(contrib_ga)/total_contrib) * (1 if contrib_ga >= 0 else -1),
+            delta_roe_pp * (abs(contrib_maf)/total_contrib) * (1 if contrib_maf >= 0 else -1),
+            delta_roe_pp
+        ]
+        
+        fig = go.Figure(go.Waterfall(
+            x=['Margem', 'Giro', 'MAF', 'Δ ROE (pp)'],
+            measure=['relative', 'relative', 'relative', 'total'],
+            y=values,
+            connector={'line': {'color': 'rgba(120,120,120,0.4)'}}
+        ))
+        fig.update_layout(title=f"DuPont: Contribuição Δ ROE ({ano_prev}→{ano_cur})")
+        return fig
+    
+    def create_liquidez_melhorado(self):
+        """Slope charts de liquidez para miniatura"""
+        df = self.df.sort_values('Ano')
+        if len(df) < 2:
+            return self.create_liquidez_radar()  # Fallback
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        if 'Liquidez Corrente (LC) ' not in df.columns or 'Liquidez Imediata (LI)' not in df.columns:
+            return self.create_liquidez_radar()  # Fallback
+            
+        lc_prev, lc_cur = prev['Liquidez Corrente (LC) '], cur['Liquidez Corrente (LC) ']
+        li_prev, li_cur = prev['Liquidez Imediata (LI)'], cur['Liquidez Imediata (LI)']
+        
+        fig = go.Figure()
+        # LC
+        fig.add_trace(go.Scatter(
+            x=[ano_prev, ano_cur], y=[lc_prev, lc_cur],
+            mode='lines+markers+text', name='LC',
+            text=[f"{lc_prev:.2f}", f"{lc_cur:.2f}"],
+            line=dict(color='#3498db', width=3)
+        ))
+        # LI  
+        fig.add_trace(go.Scatter(
+            x=[ano_prev, ano_cur], y=[li_prev, li_cur],
+            mode='lines+markers+text', name='LI',
+            text=[f"{li_prev:.2f}", f"{li_cur:.2f}"],
+            line=dict(color='#e74c3c', width=3)
+        ))
+        fig.add_hline(y=1.0, line_dash="dash", line_color="red", opacity=0.5)
+        fig.update_layout(title="Evolução Liquidez (LC/LI)")
+        return fig
+    
+    def create_endividamento_melhorado(self):
+        """Barras comparativas de endividamento para miniatura"""
+        df = self.df.sort_values('Ano')
+        if len(df) < 2:
+            return self.create_estrutura_capital()  # Fallback
+            
+        required = ['Passivo Circulante', 'Passivo Não Circulante']
+        if not all(c in df.columns for c in required):
+            return self.create_estrutura_capital()  # Fallback
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        pc_prev, pc_cur = prev['Passivo Circulante'], cur['Passivo Circulante']
+        pnc_prev, pnc_cur = prev['Passivo Não Circulante'], cur['Passivo Não Circulante']
+        
+        fig = go.Figure()
+        fig.add_bar(name='Curto Prazo', x=[str(ano_prev), str(ano_cur)], y=[pc_prev, pc_cur], marker_color='#e74c3c')
+        fig.add_bar(name='Longo Prazo', x=[str(ano_prev), str(ano_cur)], y=[pnc_prev, pnc_cur], marker_color='#3498db')
+        fig.update_layout(barmode='stack', title='Evolução Passivos (Absoluto)')
+        return fig
+    
+    def create_ciclo_melhorado(self):
+        """Slope chart do ciclo + barras componentes para miniatura"""  
+        df = self.df.sort_values('Ano')
+        if len(df) < 2:
+            return self.create_ciclo_financeiro()  # Fallback
+            
+        required = ['Prazo Médio de Renovação dos Estoques (PMRE) ','Prazo Médio de Recebimento das Vendas (PMRV) ','Prazo Médio de Pagamento das Compras (PMPC) ','Ciclo Operacional e Ciclo Financeiro']
+        if not all(c in df.columns for c in required):
+            return self.create_ciclo_financeiro()  # Fallback
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        ciclo_prev = prev['Ciclo Operacional e Ciclo Financeiro']
+        ciclo_cur = cur['Ciclo Operacional e Ciclo Financeiro']
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=[ano_prev, ano_cur], y=[ciclo_prev, ciclo_cur],
+            mode='lines+markers+text',
+            text=[f"{ciclo_prev:.0f}", f"{ciclo_cur:.0f}"],
+            line=dict(color='#e74c3c', width=4),
+            marker=dict(size=12),
+            name='Ciclo Financeiro'
+        ))
+        fig.update_layout(title='Evolução Ciclo Financeiro (dias)', yaxis_title='Dias')
+        return fig

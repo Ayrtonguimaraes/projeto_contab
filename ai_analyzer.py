@@ -842,6 +842,86 @@ Responda em português brasileiro.
         except Exception as e:
             return f"Erro na análise do gráfico: {e}"
     
+    def generate_metric_insights(self, metric_data, metric_id, df_filtrado=None, custom_question=None):
+        """Gera insights ou responde pergunta sobre uma métrica específica.
+
+        Args:
+            metric_data (dict): Dados preparados da métrica.
+            metric_id (str): Identificador da métrica.
+            df_filtrado (pd.DataFrame, opcional): DataFrame para contexto adicional.
+            custom_question (str, opcional): Pergunta do usuário. Se None gera análise padrão.
+        """
+        if not self.is_available():
+            return "IA não disponível. Configure a API key."
+        try:
+            serial_metric = self._convert_to_serializable(metric_data)
+            
+            # Gerar contexto executivo se DataFrame disponível
+            alerts, narrativa = ([], None)
+            if isinstance(df_filtrado, pd.DataFrame) and not df_filtrado.empty:
+                alerts, narrativa = self._build_executive_alerts_and_narrative(df_filtrado)
+            
+            alerts_texto = "; ".join([f"[{a['nivel'].upper()}] {a['mensagem']}" for a in alerts]) if alerts else "Nenhum alerta relevante."
+            
+            base_context_json = json.dumps({
+                "metric_id": metric_id,
+                "metric_data": serial_metric,
+                "executive_alerts": alerts,
+                "executive_narrative": narrativa
+            }, indent=2, ensure_ascii=False)
+            
+            if custom_question:
+                prompt = f"""
+Você é um analista financeiro sênior. Responda de forma objetiva e executiva à pergunta sobre a métrica selecionada.
+
+MÉTRICA: {metric_id}
+ALERTAS EXECUTIVOS: {alerts_texto}
+NARRATIVA EXECUTIVA (se houver): {narrativa if narrativa else 'N/A'}
+DADOS DA MÉTRICA (JSON):
+```json
+{base_context_json}
+```
+
+PERGUNTA DO USUÁRIO: {custom_question}
+
+Responda de forma clara, técnica mas acessível. Use dados específicos dos números quando relevante. Se houver tendências, riscos ou oportunidades, destaque-os.
+"""
+            else:
+                prompt = f"""
+Você é um analista financeiro sênior. Analise esta métrica financeira específica e forneça insights executivos.
+
+MÉTRICA: {metric_id}
+ALERTAS EXECUTIVOS: {alerts_texto}
+DADOS DA MÉTRICA (JSON):
+```json
+{base_context_json}
+```
+
+Forneça uma análise estruturada contendo:
+
+## 📊 ANÁLISE DA MÉTRICA
+- Valor atual e evolução histórica
+- Comparação com período anterior
+- Tendência identificada
+
+## 🎯 BENCHMARKS E INTERPRETAÇÃO
+- Como interpretar estes valores
+- Comparação com boas práticas do mercado
+- Se está em nível adequado, alto ou baixo
+
+## ⚠️ INSIGHTS E RECOMENDAÇÕES
+- Principais achados desta métrica
+- Riscos ou oportunidades identificados
+- Ações recomendadas baseadas nos dados
+
+Use dados específicos dos números. Seja objetivo e foque em insights acionáveis.
+"""
+            
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Erro na análise da métrica: {e}"
+    
     def analyze_all_charts(self, df, df_filtrado, kpis):
         """
         Analisa todos os gráficos de uma vez e fornece insights integrados
