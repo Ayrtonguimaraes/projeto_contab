@@ -102,51 +102,395 @@ class DashboardExecutivoPage(BasePage):
     
     # -------------------- Liquidez ------------------------
     def _render_liquidez_block(self):
-        st.subheader("🛡️ Liquidez - Zona de Segurança & Sensibilidades")
-        df = self.analyzer.df
+        st.subheader("🛡️ Liquidez - Análise de Capacidade de Pagamento")
+        df = self.analyzer.df.sort_values('Ano')
         required = ['Ano','Liquidez Corrente (LC) ','Liquidez Imediata (LI)','Caixa e Equivalentes de Caixa']
         if not all(c in df.columns for c in required):
             st.warning("Colunas de liquidez ausentes para análise detalhada.")
             return
-        anos = df['Ano']
-        lc = df['Liquidez Corrente (LC) ']
-        li = df['Liquidez Imediata (LI)']
-        fig = go.Figure()
-        # Zona de segurança (1.0 - 2.0)
-        fig.add_hrect(y0=1.0, y1=2.0, fillcolor="lightgreen", opacity=0.25, line_width=0)
-        fig.add_trace(go.Scatter(x=anos, y=lc, mode='lines+markers', name='Liquidez Corrente', line=dict(color='#1f77b4', width=3)))
-        fig.add_trace(go.Scatter(x=anos, y=li, mode='lines+markers', name='Liquidez Imediata', line=dict(color='#ff7f0e', width=3)))
-        fig.update_layout(title="Liquidez Corrente vs Zona de Segurança", height=420, legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0))
-        st.plotly_chart(fig, use_container_width=True)
-        # Insight rápido
-        if len(anos) >= 2:
-            delta_li = li.iloc[-1] - li.iloc[-2]
-            if delta_li < 0:
-                st.info(f"🔍 Queda de {abs(delta_li):.2f} na Liquidez Imediata no último período — investigar redução de caixa ou aumento de passivos de curtíssimo prazo.")
+            
+        if len(df) < 2:
+            st.info("Necessário pelo menos 2 anos para análise comparativa de liquidez.")
+            return
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        # ----- Tabela de componentes da liquidez -----
+        import pandas as pd
+        
+        # Buscar componentes se disponíveis
+        ativo_circ_cols = ['Caixa e Equivalentes de Caixa', 'Contas a Receber (Circulante)', 'Estoques']
+        passivo_circ_col = 'Passivo Circulante'
+        
+        liquidez_data = []
+        
+        # Liquidez Corrente
+        lc_prev, lc_cur = prev['Liquidez Corrente (LC) '], cur['Liquidez Corrente (LC) ']
+        delta_lc = lc_cur - lc_prev
+        liquidez_data.append({
+            'Indicador': 'Liquidez Corrente',
+            f'{ano_prev}': f"{lc_prev:.2f}",
+            f'{ano_cur}': f"{lc_cur:.2f}",
+            'Δ': f"{delta_lc:+.2f}",
+            'Status': '🔴 Crítico' if lc_cur < 1.0 else '🟡 Atenção' if lc_cur < 1.2 else '🟢 Adequado',
+            'Meta': '≥ 1.20'
+        })
+        
+        # Liquidez Imediata  
+        li_prev, li_cur = prev['Liquidez Imediata (LI)'], cur['Liquidez Imediata (LI)']
+        delta_li = li_cur - li_prev
+        liquidez_data.append({
+            'Indicador': 'Liquidez Imediata',
+            f'{ano_prev}': f"{li_prev:.2f}",
+            f'{ano_cur}': f"{li_cur:.2f}",
+            'Δ': f"{delta_li:+.2f}",
+            'Status': '🔴 Crítico' if li_cur < 0.15 else '🟡 Atenção' if li_cur < 0.30 else '🟢 Adequado',
+            'Meta': '≥ 0.30'
+        })
+        
+        # Liquidez Geral se disponível
+        if 'Liquidez Geral (LG)' in df.columns:
+            lg_prev, lg_cur = prev['Liquidez Geral (LG)'], cur['Liquidez Geral (LG)']
+            delta_lg = lg_cur - lg_prev
+            liquidez_data.append({
+                'Indicador': 'Liquidez Geral',
+                f'{ano_prev}': f"{lg_prev:.2f}",
+                f'{ano_cur}': f"{lg_cur:.2f}",
+                'Δ': f"{delta_lg:+.2f}",
+                'Status': '🔴 Crítico' if lg_cur < 1.0 else '🟡 Atenção' if lg_cur < 1.1 else '🟢 Adequado',
+                'Meta': '≥ 1.10'
+            })
+        
+        liquidez_df = pd.DataFrame(liquidez_data)
+        st.dataframe(liquidez_df, use_container_width=True, hide_index=True)
+        
+        # ----- Gráficos lado a lado -----
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Slope charts focados (sem zona gigante irrelevante)
+            fig_slope = go.Figure()
+            
+            # LC
+            fig_slope.add_trace(go.Scatter(
+                x=[ano_prev, ano_cur], 
+                y=[lc_prev, lc_cur], 
+                mode='lines+markers+text',
+                text=[f"{lc_prev:.2f}", f"{lc_cur:.2f}"],
+                textposition='top center',
+                line=dict(color='#3498db', width=4),
+                marker=dict(size=10),
+                name='Liquidez Corrente'
+            ))
+            
+            # LI (escala secundária)
+            fig_slope.add_trace(go.Scatter(
+                x=[ano_prev, ano_cur], 
+                y=[li_prev, li_cur], 
+                mode='lines+markers+text',
+                text=[f"{li_prev:.2f}", f"{li_cur:.2f}"],
+                textposition='bottom center',
+                line=dict(color='#e74c3c', width=4),
+                marker=dict(size=10),
+                name='Liquidez Imediata',
+                yaxis='y2'
+            ))
+            
+            # Linha de referência LC
+            fig_slope.add_hline(y=1.0, line_dash="dash", line_color="red", opacity=0.7)
+            fig_slope.add_annotation(x=ano_cur, y=1.0, text="Meta LC: 1.0", showarrow=False, yshift=10)
+            
+            fig_slope.update_layout(
+                title='Evolução dos Indicadores de Liquidez',
+                height=400,
+                yaxis=dict(title='Liquidez Corrente', side='left'),
+                yaxis2=dict(title='Liquidez Imediata', side='right', overlaying='y'),
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, x=0)
+            )
+            st.plotly_chart(fig_slope, use_container_width=True)
+        
+        with col2:
+            # Composição do Ativo Circulante (se dados disponíveis)
+            if all(col in df.columns for col in ativo_circ_cols) and passivo_circ_col in df.columns:
+                caixa_cur = cur['Caixa e Equivalentes de Caixa']
+                receber_cur = cur['Contas a Receber (Circulante)'] if 'Contas a Receber (Circulante)' in df.columns else 0
+                estoque_cur = cur['Estoques'] if 'Estoques' in df.columns else 0
+                passivo_cur = cur[passivo_circ_col]
+                
+                labels = ['Caixa', 'A Receber', 'Estoques', 'Passivo Circulante']
+                values = [caixa_cur, receber_cur, estoque_cur, -passivo_cur]  # Passivo negativo
+                colors = ['#2ecc71', '#f39c12', '#9b59b6', '#e74c3c']
+                
+                fig_comp = go.Figure()
+                fig_comp.add_bar(
+                    x=labels, 
+                    y=values,
+                    marker_color=colors,
+                    text=[f"R$ {abs(v):,.0f}".replace(',', '.') for v in values],
+                    textposition='auto'
+                )
+                fig_comp.add_hline(y=0, line_color="black", line_width=1)
+                fig_comp.update_layout(
+                    title=f'Composição da Liquidez ({ano_cur})',
+                    height=400,
+                    yaxis_title='Valor (R$)',
+                    yaxis=dict(tickformat=',.0f')
+                )
+                st.plotly_chart(fig_comp, use_container_width=True)
+            else:
+                # Gráfico de barras simples LC vs LI
+                fig_bars = go.Figure()
+                fig_bars.add_bar(
+                    name='Liquidez Corrente',
+                    x=[str(ano_prev), str(ano_cur)],
+                    y=[lc_prev, lc_cur],
+                    marker_color='#3498db',
+                    text=[f"{lc_prev:.2f}", f"{lc_cur:.2f}"],
+                    textposition='auto'
+                )
+                fig_bars.add_bar(
+                    name='Liquidez Imediata',
+                    x=[str(ano_prev), str(ano_cur)],
+                    y=[li_prev, li_cur],
+                    marker_color='#e74c3c',
+                    text=[f"{li_prev:.2f}", f"{li_cur:.2f}"],
+                    textposition='auto'
+                )
+                fig_bars.update_layout(
+                    title='Comparação dos Indicadores',
+                    height=400,
+                    barmode='group'
+                )
+                st.plotly_chart(fig_bars, use_container_width=True)
+        
+        # ----- Análise de risco e insights -----
+        st.markdown("### 🔍 Análise de Risco")
+        
+        risk_insights = []
+        
+        # Risco LC
+        if lc_cur < 1.0:
+            deficit = (1.0 - lc_cur) * cur[passivo_circ_col] if passivo_circ_col in df.columns else 0
+            risk_insights.append(
+                f"🚨 **Risco Alto**: LC {lc_cur:.2f} indica dificuldade para cobrir obrigações de curto prazo"
+                + (f" (déficit estimado: R$ {deficit:,.0f})".replace(',', '.') if deficit > 0 else "")
+            )
+        elif lc_cur < 1.2:
+            risk_insights.append(f"⚠️ **Risco Moderado**: LC {lc_cur:.2f} em zona de atenção")
+        else:
+            risk_insights.append(f"✅ **Risco Baixo**: LC {lc_cur:.2f} adequado para cobertura")
+        
+        # Tendência
+        if delta_lc < -0.1:
+            risk_insights.append(f"📉 **Tendência Negativa**: LC caiu {abs(delta_lc):.2f} pontos vs {ano_prev}")
+        elif delta_lc > 0.1:
+            risk_insights.append(f"📈 **Tendência Positiva**: LC subiu {delta_lc:.2f} pontos vs {ano_prev}")
+        
+        # LI específico
+        if delta_li > 0.1:
+            risk_insights.append(f"💰 **Melhora no Caixa**: LI aumentou {delta_li:.2f} (mais liquidez imediata)")
+        elif delta_li < -0.1:
+            risk_insights.append(f"💸 **Redução do Caixa**: LI caiu {abs(delta_li):.2f} (menos liquidez imediata)")
+        
+        for insight in risk_insights:
+            if "🚨" in insight:
+                st.error(insight)
+            elif "⚠️" in insight:
+                st.warning(insight)
+            else:
+                st.info(insight)
     
     # -------------------- Endividamento -------------------
     def _render_endividamento_block(self):
-        st.subheader("🏦 Estrutura de Endividamento - Composição 100%")
-        df = self.analyzer.df
+        st.subheader("🏦 Estrutura de Endividamento - Análise Completa")
+        df = self.analyzer.df.sort_values('Ano')
         required = ['Ano','Passivo Circulante','Passivo Não Circulante']
         if not all(c in df.columns for c in required):
             st.warning("Colunas de passivos ausentes.")
             return
-        data = df[['Ano','Passivo Circulante','Passivo Não Circulante']].copy()
-        data['Total Passivos'] = data['Passivo Circulante'] + data['Passivo Não Circulante']
-        data['Curto %'] = data['Passivo Circulante'] / data['Total Passivos'] * 100
-        data['Longo %'] = data['Passivo Não Circulante'] / data['Total Passivos'] * 100
-        fig = go.Figure()
-        fig.add_bar(name='Curto Prazo', x=data['Ano'], y=data['Curto %'], marker_color='#ff9999')
-        fig.add_bar(name='Longo Prazo', x=data['Ano'], y=data['Longo %'], marker_color='#66b3ff')
-        fig.update_layout(barmode='stack', yaxis=dict(ticksuffix='%'), title='Composição da Dívida (100%)', height=420)
-        st.plotly_chart(fig, use_container_width=True)
-        # Linha EG se existir
+            
+        if len(df) < 2:
+            st.info("Necessário pelo menos 2 anos para análise comparativa de endividamento.")
+            return
+            
+        prev, cur = df.iloc[-2], df.iloc[-1]
+        ano_prev, ano_cur = int(prev['Ano']), int(cur['Ano'])
+        
+        # ----- Tabela comparativa de passivos -----
+        import pandas as pd
+        
+        pc_prev, pc_cur = prev['Passivo Circulante'], cur['Passivo Circulante']
+        pnc_prev, pnc_cur = prev['Passivo Não Circulante'], cur['Passivo Não Circulante']
+        total_prev, total_cur = pc_prev + pnc_prev, pc_cur + pnc_cur
+        
+        passivos_data = [
+            {
+                'Tipo': 'Curto Prazo',
+                f'{ano_prev}': f"R$ {pc_prev:,.0f}".replace(',', '.'),
+                f'{ano_cur}': f"R$ {pc_cur:,.0f}".replace(',', '.'),
+                'Δ Absoluto': f"R$ {pc_cur - pc_prev:+,.0f}".replace(',', '.'),
+                'Δ %': f"{((pc_cur - pc_prev) / pc_prev * 100):+.1f}%" if pc_prev != 0 else "—",
+                f'% {ano_prev}': f"{pc_prev / total_prev * 100:.1f}%",
+                f'% {ano_cur}': f"{pc_cur / total_cur * 100:.1f}%"
+            },
+            {
+                'Tipo': 'Longo Prazo',
+                f'{ano_prev}': f"R$ {pnc_prev:,.0f}".replace(',', '.'),
+                f'{ano_cur}': f"R$ {pnc_cur:,.0f}".replace(',', '.'),
+                'Δ Absoluto': f"R$ {pnc_cur - pnc_prev:+,.0f}".replace(',', '.'),
+                'Δ %': f"{((pnc_cur - pnc_prev) / pnc_prev * 100):+.1f}%" if pnc_prev != 0 else "—",
+                f'% {ano_prev}': f"{pnc_prev / total_prev * 100:.1f}%",
+                f'% {ano_cur}': f"{pnc_cur / total_cur * 100:.1f}%"
+            },
+            {
+                'Tipo': '📊 TOTAL',
+                f'{ano_prev}': f"R$ {total_prev:,.0f}".replace(',', '.'),
+                f'{ano_cur}': f"R$ {total_cur:,.0f}".replace(',', '.'),
+                'Δ Absoluto': f"R$ {total_cur - total_prev:+,.0f}".replace(',', '.'),
+                'Δ %': f"{((total_cur - total_prev) / total_prev * 100):+.1f}%" if total_prev != 0 else "—",
+                f'% {ano_prev}': "100.0%",
+                f'% {ano_cur}': "100.0%"
+            }
+        ]
+        
+        passivos_df = pd.DataFrame(passivos_data)
+        st.dataframe(passivos_df, use_container_width=True, hide_index=True)
+        
+        # ----- Gráficos lado a lado -----
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Barras comparativas absolutas (melhor que empilhado)
+            fig_abs = go.Figure()
+            fig_abs.add_bar(
+                name='Curto Prazo', 
+                x=[str(ano_prev), str(ano_cur)], 
+                y=[pc_prev, pc_cur], 
+                marker_color='#e74c3c',
+                text=[f"R$ {pc_prev:,.0f}".replace(',', '.'), f"R$ {pc_cur:,.0f}".replace(',', '.')],
+                textposition='auto'
+            )
+            fig_abs.add_bar(
+                name='Longo Prazo', 
+                x=[str(ano_prev), str(ano_cur)], 
+                y=[pnc_prev, pnc_cur], 
+                marker_color='#3498db',
+                text=[f"R$ {pnc_prev:,.0f}".replace(',', '.'), f"R$ {pnc_cur:,.0f}".replace(',', '.')],
+                textposition='auto'
+            )
+            fig_abs.update_layout(
+                barmode='stack',
+                title='Evolução Absoluta dos Passivos',
+                height=400,
+                yaxis_title='Valor (R$)',
+                yaxis=dict(tickformat=',.0f')
+            )
+            st.plotly_chart(fig_abs, use_container_width=True)
+        
+        with col2:
+            # Gráfico de composição mais claro
+            labels = ['Curto Prazo', 'Longo Prazo']
+            values_prev = [pc_prev / total_prev * 100, pnc_prev / total_prev * 100]
+            values_cur = [pc_cur / total_cur * 100, pnc_cur / total_cur * 100]
+            
+            fig_comp = go.Figure()
+            # Barras lado a lado em vez de empilhadas
+            fig_comp.add_bar(
+                name=str(ano_prev), 
+                x=labels, 
+                y=values_prev, 
+                marker_color='#95a5a6',
+                text=[f"{v:.1f}%" for v in values_prev],
+                textposition='auto'
+            )
+            fig_comp.add_bar(
+                name=str(ano_cur), 
+                x=labels, 
+                y=values_cur, 
+                marker_color='#2c3e50',
+                text=[f"{v:.1f}%" for v in values_cur],
+                textposition='auto'
+            )
+            fig_comp.update_layout(
+                barmode='group',
+                title='Composição % dos Passivos',
+                height=400,
+                yaxis_title='Participação (%)',
+                yaxis=dict(ticksuffix='%', range=[0, 100])
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
+        
+        # ----- Endividamento Geral integrado -----
         if 'Endividamento Geral (EG)' in df.columns:
-            eg_fig = go.Figure()
-            eg_fig.add_trace(go.Scatter(x=df['Ano'], y=df['Endividamento Geral (EG)'], mode='lines+markers', name='EG', line=dict(color='#333', width=3)))
-            eg_fig.update_layout(title='Evolução do Endividamento Geral', height=300)
-            st.plotly_chart(eg_fig, use_container_width=True)
+            eg_prev, eg_cur = prev['Endividamento Geral (EG)'], cur['Endividamento Geral (EG)']
+            
+            col3, col4 = st.columns([0.7, 0.3])
+            with col3:
+                # Slope chart do EG
+                fig_eg = go.Figure()
+                fig_eg.add_trace(go.Scatter(
+                    x=[ano_prev, ano_cur], 
+                    y=[eg_prev, eg_cur], 
+                    mode='lines+markers+text',
+                    text=[f"{eg_prev:.1%}", f"{eg_cur:.1%}"],
+                    textposition='top center',
+                    line=dict(color='#f39c12', width=4),
+                    marker=dict(size=12)
+                ))
+                fig_eg.update_layout(
+                    title='Evolução do Endividamento Geral',
+                    height=300,
+                    yaxis=dict(tickformat='.0%'),
+                    showlegend=False
+                )
+                st.plotly_chart(fig_eg, use_container_width=True)
+                
+            with col4:
+                # Métrica destacada
+                delta_eg = eg_cur - eg_prev
+                st.metric(
+                    "Endividamento Geral", 
+                    f"{eg_cur:.1%}",
+                    f"{delta_eg:+.1%}"
+                )
+                
+                # Interpretação automática
+                if delta_eg > 0.05:  # 5pp
+                    st.warning("⚠️ Aumento significativo do endividamento")
+                elif delta_eg < -0.05:
+                    st.success("✅ Redução significativa do endividamento")
+                else:
+                    st.info("ℹ️ Endividamento relativamente estável")
+        
+        # ----- Insights automáticos -----
+        st.markdown("### 🔍 Insights Automáticos")
+        
+        delta_total = total_cur - total_prev
+        delta_pc = pc_cur - pc_prev
+        delta_pnc = pnc_cur - pnc_prev
+        
+        insights = []
+        
+        if abs(delta_total) > total_prev * 0.1:  # Mudança >10%
+            direction = "aumentou" if delta_total > 0 else "diminuiu"
+            insights.append(f"📈 Endividamento total {direction} R$ {abs(delta_total):,.0f}".replace(',', '.'))
+        
+        if abs(delta_pc) > abs(delta_pnc):
+            maior = "curto prazo" if abs(delta_pc) > abs(delta_pnc) else "longo prazo"
+            insights.append(f"🎯 Maior variação foi no {maior}")
+        
+        # Mudança na composição
+        comp_cp_prev = pc_prev / total_prev * 100
+        comp_cp_cur = pc_cur / total_cur * 100
+        delta_comp = comp_cp_cur - comp_cp_prev
+        
+        if abs(delta_comp) > 2:  # Mudança >2pp na composição
+            direction = "aumentou" if delta_comp > 0 else "diminuiu"
+            insights.append(f"⚖️ Participação de curto prazo {direction} {abs(delta_comp):.1f} pontos percentuais")
+        
+        for insight in insights:
+            st.info(insight)
     
     # -------------------- Rentabilidade (DuPont) ----------
     def _render_rentabilidade_block(self):
