@@ -30,30 +30,43 @@ class PageManager:
             "dupont": AnaliseDupontPage,
             "indicadores": IndicadoresGeraisPage,
         }
+        try:
+            print("[PageManager] Páginas registradas:", list(self.pages.keys()))
+        except Exception:
+            pass
     
     def get_page_class(self, page_key):
+        try:
+            print(f"[PageManager] get_page_class chamado para: {page_key}")
+        except Exception:
+            pass
         page_class = self.pages.get(page_key)
-        # Auto tentativa de (re)registro se a chave 'indicadores' não estiver presente devido a cache de módulo
-        if not page_class and page_key == 'indicadores':
+        if page_class is None and page_key == 'indicadores':
             try:
+                print("[PageManager] 'indicadores' ausente, tentando recarregar módulo...")
                 from importlib import reload
                 import pages.indicadores_gerais as indicadores_mod
                 reload(indicadores_mod)
                 self.pages['indicadores'] = indicadores_mod.IndicadoresGeraisPage
                 page_class = self.pages.get(page_key)
-            except Exception:
-                pass
+                print("[PageManager] Após reload, chaves:", list(self.pages.keys()))
+            except Exception as e:
+                print("[PageManager] Falha reload indicadores:", e)
         return page_class
     
     def render_page(self, page_key, df, financial_analyzer):
         page_class = self.get_page_class(page_key)
         if page_class:
+            try:
+                print(f"[PageManager] Renderizando página: {page_key} -> {page_class.__name__}")
+            except Exception:
+                pass
             page_instance = page_class(df, financial_analyzer)
             page_instance.render()
         else:
             import streamlit as st
             st.error(f"Página '{page_key}' não encontrada")
-            st.caption(f"Debug: páginas registradas = {list(self.pages.keys())}")
+            st.caption(f"Debug keys atuais: {list(self.pages.keys())}")
     
     def get_available_pages(self):
         return list(self.pages.keys())
