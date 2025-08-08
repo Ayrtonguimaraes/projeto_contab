@@ -61,14 +61,14 @@ def _calc_delta(atual, anterior):
 
 
 def criar_sidebar(df, analyzer):
-    """Cria sidebar com filtros e KPIs. Retorna df filtrado e anos selecionados."""
+    """Cria sidebar apenas com filtros, resumo e exportação (sem KPIs)."""
     st.sidebar.title("🏢 Análise Financeira")
 
     if df is None or df.empty:
         st.sidebar.error("❌ Nenhum dado disponível")
         return df, []
 
-    # Filtros (Agrupados em expander)
+    # Filtros
     with st.sidebar.expander("🎛️ Filtros", expanded=True):
         anos_disponiveis = sorted(df['Ano'].unique(), reverse=True) if 'Ano' in df.columns else []
         anos_sel = st.multiselect(
@@ -77,40 +77,11 @@ def criar_sidebar(df, analyzer):
         )
         if not anos_sel:
             st.info("Selecione ao menos um ano.")
-
         if st.button("🔄 Reset Filtros"):
             st.session_state.pop('anos_sel', None)
             st.rerun()
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 KPIs Principais")
-    try:
-        kpis = analyzer.get_kpis_principais()
-        col1, col2, col3, col4 = st.sidebar.columns(4)
-        with col1:
-            st.metric(
-                "Receita", format_currency(kpis['receita_liquida']['atual']),
-                _calc_delta(kpis['receita_liquida']['atual'], kpis['receita_liquida']['anterior'])
-            )
-        with col2:
-            st.metric(
-                "Lucro", format_currency(kpis['lucro_liquido']['atual']),
-                _calc_delta(kpis['lucro_liquido']['atual'], kpis['lucro_liquido']['anterior'])
-            )
-        with col3:
-            st.metric(
-                "ROE", format_percentage(kpis['roe']['atual']),
-                f"{kpis['roe']['variacao']:.1f} pp" if kpis['roe']['variacao'] else "—"
-            )
-        with col4:
-            st.metric(
-                "ROA", format_percentage(kpis['roa']['atual']),
-                f"{kpis['roa']['variacao']:.1f} pp" if kpis['roa']['variacao'] else "—"
-            )
-    except Exception as e:
-        st.sidebar.error(f"Erro KPIs: {e}")
-
-    # Filtragem por ano (recria df filtrado)
+    # Filtragem por ano
     if anos_sel:
         df_filtrado = df[df['Ano'].isin(anos_sel)].copy()
     else:
