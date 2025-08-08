@@ -801,24 +801,46 @@ RESPONDA APENAS COM O CONTEÚDO SOLICITADO.
                 "executive_narrative": narrativa
             }, indent=2, ensure_ascii=False)
             if custom_question:
+                # Validação básica se a pergunta é relacionada a finanças
+                finance_keywords = [
+                    'financeira', 'contábil', 'receita', 'lucro', 'prejuízo', 'ativo', 'passivo', 'patrimônio',
+                    'liquidez', 'rentabilidade', 'endividamento', 'roa', 'roe', 'margem', 'giro', 'ciclo',
+                    'capital', 'investimento', 'fluxo', 'caixa', 'despesa', 'custo', 'resultado', 'balanço',
+                    'dre', 'indicador', 'índice', 'ratio', 'análise', 'performance', 'desempenho', 'benchmark',
+                    'métrica', 'alavancagem', 'solvência', 'imobilizado', 'circulante', 'estoque', 'fornecedor',
+                    'cliente', 'prazo', 'pmre', 'pmrv', 'pmpc', 'dupont', 'ebitda', 'variação', 'crescimento',
+                    'queda', 'aumento', 'diminuição', 'evolução', 'tendência', 'risco', 'oportunidade', 'gráfico',
+                    'visualização', 'dados', 'valores', 'comparação'
+                ]
+                
+                question_lower = custom_question.lower()
+                is_finance_related = any(keyword in question_lower for keyword in finance_keywords)
+                
+                if not is_finance_related:
+                    return "A pergunta não está relacionada à análise financeira. Por favor, faça uma pergunta sobre métricas financeiras, indicadores contábeis ou análise empresarial."
+                
                 prompt = f"""
-Você é um analista financeiro sênior. Responda de forma objetiva e executiva à pergunta sobre a visualização selecionada.
+Você é um ANALISTA FINANCEIRO ESPECIALISTA. Responda APENAS perguntas relacionadas à análise financeira, métricas contábeis e indicadores empresariais.
 
-TIPO DE VISUALIZAÇÃO: {chart_type}
+CONTEXTO DA VISUALIZAÇÃO: {chart_type}
 ALERTAS EXECUTIVOS: {alerts_texto}
-NARRATIVA EXECUTIVA (se houver): {narrativa if narrativa else 'N/A'}
-DADOS DA VISUALIZAÇÃO (JSON):
+DADOS DA VISUALIZAÇÃO:
 {base_context_json}
 
-PERGUNTA DO USUÁRIO:
-{custom_question}
+PERGUNTA DO USUÁRIO: {custom_question}
 
-INSTRUÇÕES:
-1. Se existirem alertas críticos, trate-os primeiro.
-2. Cite números/chaves relevantes do chart_data (não invente valores).
-3. Forneça implicações estratégicas.
-4. Termine com 1-2 recomendações práticas.
-Responda em português brasileiro, formato conciso.
+FORMATO DE RESPOSTA:
+
+## 📊 ANÁLISE DOS DADOS
+[Análise baseada nos dados da visualização]
+
+## 📈 INTERPRETAÇÃO TÉCNICA  
+[Significado dos indicadores no contexto empresarial]
+
+## ⚠️ ALERTAS E RECOMENDAÇÕES
+[Principais achados e ações recomendadas]
+
+Seja preciso, use números específicos dos dados, e mantenha foco exclusivamente em análise financeira.
 """
             else:
                 prompt = f"""
@@ -871,50 +893,100 @@ Responda em português brasileiro.
             }, indent=2, ensure_ascii=False)
             
             if custom_question:
+                # Validação básica se a pergunta é relacionada a finanças
+                finance_keywords = [
+                    'financeira', 'contábil', 'receita', 'lucro', 'prejuízo', 'ativo', 'passivo', 'patrimônio',
+                    'liquidez', 'rentabilidade', 'endividamento', 'roa', 'roe', 'margem', 'giro', 'ciclo',
+                    'capital', 'investimento', 'fluxo', 'caixa', 'despesa', 'custo', 'resultado', 'balanço',
+                    'dre', 'indicador', 'índice', 'ratio', 'análise', 'performance', 'desempenho', 'benchmark',
+                    'métrica', 'alavancagem', 'solvência', 'imobilizado', 'circulante', 'estoque', 'fornecedor',
+                    'cliente', 'prazo', 'pmre', 'pmrv', 'pmpc', 'dupont', 'ebitda', 'variação', 'crescimento',
+                    'queda', 'aumento', 'diminuição', 'evolução', 'tendência', 'risco', 'oportunidade'
+                ]
+                
+                question_lower = custom_question.lower()
+                is_finance_related = any(keyword in question_lower for keyword in finance_keywords)
+                
+                if not is_finance_related:
+                    return "A pergunta não está relacionada à análise financeira. Por favor, faça uma pergunta sobre métricas financeiras, indicadores contábeis ou análise empresarial."
+                
                 prompt = f"""
-Você é um analista financeiro sênior. Responda de forma objetiva e executiva à pergunta sobre a métrica selecionada.
+Você é um ANALISTA FINANCEIRO ESPECIALISTA. Responda APENAS perguntas relacionadas à análise financeira, métricas contábeis e indicadores empresariais.
 
-MÉTRICA: {metric_id}
+CONTEXTO DA MÉTRICA:
+• Nome: {metric_data.get('métrica', metric_id)}
+• Categoria: {metric_data.get('categoria', 'N/A')}
+• Valores: {metric_data.get('estatísticas', {})}
+
 ALERTAS EXECUTIVOS: {alerts_texto}
-NARRATIVA EXECUTIVA (se houver): {narrativa if narrativa else 'N/A'}
-DADOS DA MÉTRICA (JSON):
+DADOS COMPLETOS:
 ```json
 {base_context_json}
 ```
 
 PERGUNTA DO USUÁRIO: {custom_question}
 
-Responda de forma clara, técnica mas acessível. Use dados específicos dos números quando relevante. Se houver tendências, riscos ou oportunidades, destaque-os.
+FORMATO DE RESPOSTA:
+
+## 📊 ANÁLISE DA MÉTRICA
+[Análise dos valores e evolução baseada nos dados fornecidos]
+
+## 📈 INTERPRETAÇÃO TÉCNICA  
+[Significado dos números no contexto empresarial]
+
+## 🎯 BENCHMARKS E COMPARAÇÃO
+[Comparação com padrões de mercado e situação da empresa]
+
+## ⚠️ INSIGHTS E RECOMENDAÇÕES
+[Principais achados e ações recomendadas]
+
+Seja preciso, use números específicos dos dados, e mantenha foco exclusivamente em análise financeira.
 """
             else:
                 prompt = f"""
-Você é um analista financeiro sênior. Analise esta métrica financeira específica e forneça insights executivos.
+Você é um ANALISTA FINANCEIRO ESPECIALISTA. Forneça uma análise executiva estruturada desta métrica financeira.
 
-MÉTRICA: {metric_id}
+CONTEXTO DA MÉTRICA:
+• Nome: {metric_data.get('métrica', metric_id)}
+• Categoria: {metric_data.get('categoria', 'N/A')}
+• Valor Atual: {metric_data.get('estatísticas', {}).get('valor_atual', 'N/A')}
+• Valor Anterior: {metric_data.get('estatísticas', {}).get('valor_anterior', 'N/A')}
+• Tendência: {metric_data.get('estatísticas', {}).get('tendência', 'N/A')}
+• Variação %: {metric_data.get('estatísticas', {}).get('variacao_percentual', 'N/A')}%
+
 ALERTAS EXECUTIVOS: {alerts_texto}
-DADOS DA MÉTRICA (JSON):
+
+DADOS COMPLETOS:
 ```json
 {base_context_json}
 ```
 
-Forneça uma análise estruturada contendo:
+FORNEÇA ANÁLISE NO FORMATO:
 
-## 📊 ANÁLISE DA MÉTRICA
-- Valor atual e evolução histórica
-- Comparação com período anterior
-- Tendência identificada
+## 📊 SITUAÇÃO ATUAL DA MÉTRICA
+• **Valor Atual:** [valor] ([variação] vs período anterior)
+• **Classificação:** [Excelente/Bom/Adequado/Preocupante/Crítico]
+• **Tendência:** [crescente/decrescente/estável] - [explicação]
 
-## 🎯 BENCHMARKS E INTERPRETAÇÃO
-- Como interpretar estes valores
-- Comparação com boas práticas do mercado
-- Se está em nível adequado, alto ou baixo
+## 📈 INTERPRETAÇÃO EXECUTIVA
+• **Significado:** [o que esta métrica representa para o negócio]
+• **Contexto Setorial:** [comparação com benchmarks de mercado]
+• **Impacto no Desempenho:** [como afeta outros indicadores]
 
-## ⚠️ INSIGHTS E RECOMENDAÇÕES
-- Principais achados desta métrica
-- Riscos ou oportunidades identificados
-- Ações recomendadas baseadas nos dados
+## 🎯 ANÁLISE COMPARATIVA
+• **vs Período Anterior:** [análise da evolução]
+• **vs Benchmarks:** [posicionamento em relação ao mercado]
+• **Contexto Histórico:** [padrões identificados nos dados]
 
-Use dados específicos dos números. Seja objetivo e foque em insights acionáveis.
+## ⚠️ RISCOS E OPORTUNIDADES
+• **Riscos Identificados:** [pontos de atenção baseados nos dados]
+• **Oportunidades:** [potenciais melhorias]
+• **Ações Recomendadas:** [próximos passos específicos]
+
+## 💡 RESUMO EXECUTIVO
+[Conclusão de 2-3 frases sobre a situação desta métrica e próximos passos]
+
+Use APENAS os dados fornecidos. Seja específico com números e percentuais.
 """
             
             response = self.model.generate_content(prompt)

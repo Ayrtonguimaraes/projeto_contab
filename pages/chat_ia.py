@@ -153,7 +153,7 @@ class ChatIAPage(BasePage):
     # Render Principal
     # --------------------------------------------------
     def render(self):
-        st.title("🤖 Chat com IA - Análise de Gráficos / Indicadores")
+        st.title("🤖 Chat com IA - Análise de Métricas Financeiras")
         st.caption("Selecione uma métrica específica da base de dados e faça perguntas. A IA responderá com análises contextualizadas.")
         st.markdown("---")
         
