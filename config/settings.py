@@ -22,9 +22,9 @@ class AppConfig:
     
     # Navegação reorganizada para evidenciar o Chat com IA como funcionalidade central
     NAVIGATION = {
-        "🏠 Dashboard Executivo": "dashboard",
+        "📊 Cards das métricas": "dashboard",
         "🤖 Chat com IA": "ai_chat",
-        "📋 Indicadores Gerais": "indicadores"
+        "📋 Indicadores": "indicadores"
     }
     
     @staticmethod
