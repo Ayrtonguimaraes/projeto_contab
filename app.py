@@ -63,12 +63,6 @@ def _calc_delta(atual, anterior):
 def criar_sidebar(df, analyzer):
     """Cria sidebar apenas com filtros, resumo e exportação (sem KPIs)."""
     st.sidebar.title("🏢 Análise Financeira")
-    # Toggle modo simplificado (afeta páginas de gráficos)
-    st.sidebar.checkbox(
-        "Modo simplificado de gráficos",
-        key="modo_simplificado",
-        help="Exibe versões resumidas (tabelas/deltas) quando disponível para poucos anos"
-    )
 
     if df is None or df.empty:
         st.sidebar.error("❌ Nenhum dado disponível")
@@ -98,15 +92,6 @@ def criar_sidebar(df, analyzer):
     st.sidebar.caption(
         f"🧾 Registros: {len(df_filtrado)} | Anos: {', '.join(map(str, sorted(df_filtrado['Ano'].unique())))}"
     )
-
-    # Exportação
-    try:
-        csv_data = df_filtrado.to_csv(index=False).encode('utf-8')
-        st.sidebar.download_button(
-            "💾 Exportar CSV", csv_data, file_name="dados_financeiros.csv", mime="text/csv"
-        )
-    except Exception:
-        pass
 
     return df_filtrado, anos_sel
 
@@ -143,14 +128,6 @@ def main():
         analyzer_page = FinancialAnalyzer(df_filtrado.copy())
     else:
         analyzer_page = base_analyzer
-
-    # Header global (contexto)
-    st.markdown(f"### 📌 Contexto Atual")
-    st.caption(
-        f"Anos Selecionados: {', '.join(map(str, anos_sel)) if anos_sel else 'Todos'} | "
-        f"Atualizado em: {st.session_state.get('last_update').strftime('%d/%m/%Y %H:%M')}"
-    )
-    st.markdown("---")
 
     # Renderização
     manager = PageManager()

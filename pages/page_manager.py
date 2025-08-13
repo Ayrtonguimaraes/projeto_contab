@@ -4,7 +4,7 @@ Gerenciador central de páginas
 
 from pages.dashboard_executivo import DashboardExecutivoPage
 from pages.chat_ia import ChatIAPage
-from pages.indicadores_gerais import IndicadoresGeraisPage
+from pages.indicadores import IndicadoresPage
 
 class PageManager:
     """Gerenciador central para todas as páginas"""
@@ -18,7 +18,7 @@ class PageManager:
         self.pages = {
             "dashboard": DashboardExecutivoPage,
             "ai_chat": ChatIAPage,
-            "indicadores": IndicadoresGeraisPage,
+            "indicadores": IndicadoresPage,
         }
         try:
             print("[PageManager] Páginas registradas:", list(self.pages.keys()))

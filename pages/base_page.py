@@ -26,21 +26,7 @@ class BasePage(ABC):
     
     def render_sidebar_info(self):
         """Renderiza informações na sidebar (comum a todas as páginas)"""
-        with st.sidebar:
-            st.markdown("### 📊 **Informações dos Dados**")
-            
-            if self.df is not None and not self.df.empty:
-                if hasattr(self.df, 'Ano'):  # Dados financeiros
-                    anos = self.df['Ano'].unique()
-                    st.success(f"✅ **Dados financeiros:** {len(anos)} anos")
-                    st.info(f"📅 **Anos:** {', '.join(map(str, sorted(anos)))}")
-                else:  # Dados contábeis
-                    total_records = len(self.df)
-                    date_range = f"{self.df['Data'].min().strftime('%m/%Y')} - {self.df['Data'].max().strftime('%m/%Y')}"
-                    st.success(f"✅ **{total_records:,}** registros carregados")
-                    st.info(f"📅 Período: **{date_range}**")
-            else:
-                st.error("❌ Nenhum dado carregado")
+        pass  # Seção removida conforme solicitado
     
     def show_loading(self, message="Carregando..."):
         """Exibe indicador de carregamento"""
