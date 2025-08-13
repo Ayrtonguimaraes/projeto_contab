@@ -162,30 +162,44 @@ class DashboardExecutivoPage(BasePage):
             else:
                 variacao_pct = 0
             
-            # Formatação inteligente baseada no tipo de métrica
+            # Formatação inteligente baseada no tipo de métrica e grandeza correta
+            
+            # DADOS BRUTOS (1-15): R$ Milhões
             if any(x in col_name.lower() for x in ['ativo', 'patrimônio', 'passivo', 'receita', 'lucro', 'caixa', 'estoque', 'imobilizado', 'cpv', 'fornecedor', 'contas a receber', 'realizável']):
-                # Valores monetários (valores no CSV estão em MILHÕES)
-                # Exemplo: 1.124.797 no CSV = R$ 1.124.797 milhões = R$ 1,124 trilhão
-                if val_cur >= 1000000:  # >= 1 trilhão
-                    valor_formatado = f"R$ {val_cur/1000000:.1f}T"  # Trilhões
-                elif val_cur >= 1000:  # >= 1 bilhão
-                    valor_formatado = f"R$ {val_cur/1000:.1f}B"  # Bilhões  
-                elif val_cur >= 1:  # >= 1 milhão
+                # Valores monetários em milhões
+                if val_cur >= 1000:
+                    valor_formatado = f"R$ {val_cur/1000:.1f}B"  # Bilhões
+                else:
                     valor_formatado = f"R$ {val_cur:.0f}M"  # Milhões
-                else:  # < 1 milhão
-                    valor_formatado = f"R$ {val_cur*1000:.0f}K"  # Milhares
-            elif any(x in col_name.lower() for x in ['ml', 'roe', 'roa', 'eg', 'pct', 'ce', 'gaf', 'lg', 'lc', 'ls', 'li', 'ga', 'impl', 'irnc']):
-                # Indicadores percentuais/proporcionais
-                if val_cur <= 1:  # Assumindo que são decimais (0.10 = 10%)
-                    valor_formatado = f"{val_cur:.1%}"
-                else:  # Assumindo que são já em formato ratio/índice
-                    valor_formatado = f"{val_cur:.2f}"
+            
+            # ESTRUTURA DE CAPITAL (16,18,19,20): Porcentagem (%) - exceto PCT(17)
+            elif any(x in col_name.lower() for x in ['endividamento geral', 'composição', 'imobilização']):
+                valor_formatado = f"{val_cur:.1%}"
+            
+            # LIQUIDEZ (21-24): Números (Ex: 0,35)
+            elif any(x in col_name.lower() for x in ['liquidez']):
+                valor_formatado = f"{val_cur:.2f}"
+            
+            # RENTABILIDADE - Porcentagens (26,27,28,30): %
+            elif any(x in col_name.lower() for x in ['margem líquida', 'roa', 'roe', 'dupont']):
+                valor_formatado = f"{val_cur:.1%}"
+            
+            # RENTABILIDADE - Números (25,29): Giro do Ativo, MAF
+            elif any(x in col_name.lower() for x in ['giro do ativo', 'multiplicador']):
+                valor_formatado = f"{val_cur:.2f}"
+            
+            # ALAVANCAGEM (35-37): Números (Ex: 0,39, 6,36, 2,47)
+            elif any(x in col_name.lower() for x in ['alavancagem']):
+                valor_formatado = f"{val_cur:.2f}"
+            
+            # PARTICIPAÇÃO DE CAPITAIS DE TERCEIROS (17): Número (Ex: 2,06)
+            elif 'participação de capitais de terceiros' in col_name.lower():
+                valor_formatado = f"{val_cur:.2f}"
+            
+            # PRAZOS MÉDIOS E CICLOS (31-34): Dias
             elif any(x in col_name.lower() for x in ['pmre', 'pmrv', 'pmpc', 'ciclo']):
-                # Prazos em dias
                 valor_formatado = f"{val_cur:.0f} dias"
-            elif any(x in col_name.lower() for x in ['maf', 'dupont', 'gao', 'gat']):
-                # Multiplicadores e índices
-                valor_formatado = f"{val_cur:.2f}x"
+            
             else:
                 # Formato padrão para outros valores
                 valor_formatado = f"{val_cur:.2f}"
