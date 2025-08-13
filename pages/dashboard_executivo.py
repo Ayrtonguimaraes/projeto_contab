@@ -184,14 +184,16 @@ class DashboardExecutivoPage(BasePage):
             elif any(x in col_name.lower() for x in ['liquidez']):
                 valor_formatado = f"{val_cur:.2f}"
             
-            # GIRO DO ATIVO (25): Número (Ex: 0,45)
-            elif 'giro do ativo' in col_name.lower():
+            # GIRO DO ATIVO (25): Número (Ex: 0,45) - ESPECÍFICO
+            elif col_name == 'Giro do Ativo (GA)':
                 valor_formatado = f"{val_cur:.2f}"
             
-            # ROA e ROE (27,28): Porcentagem (valores já em decimal no CSV)
-            elif any(x in col_name.lower() for x in ['roa', 'roi']) and 'dupont' not in col_name.lower():
+            # ROA (27): Porcentagem (%) - ESPECÍFICO  
+            elif col_name == 'Rentabilidade do Ativo (ROA ou ROI)':
                 valor_formatado = f"{val_cur:.1%}"
-            elif 'roe' in col_name.lower():
+            
+            # ROE (28): Porcentagem (%) - ESPECÍFICO
+            elif col_name == 'Rentabilidade do Patrimônio Líquido (ROE) ':
                 valor_formatado = f"{val_cur:.1%}"
             
             # OUTRAS RENTABILIDADES - Porcentagens (26,30): %
