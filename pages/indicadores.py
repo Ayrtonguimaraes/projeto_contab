@@ -230,30 +230,4 @@ class IndicadoresPage(BasePage):
     
     def render_sidebar_info(self):
         """Renderiza informações na sidebar"""
-        with st.sidebar:
-            st.markdown("### 📊 **Página Indicadores**")
-            st.info("Esta página permite fazer upload e visualizar rapidamente planilhas Excel com navegação entre abas.")
-            
-            st.markdown("---")
-            
-            # Informações dos dados carregados no app (se houver)
-            if hasattr(self, 'df') and self.df is not None and not self.df.empty:
-                st.markdown("### 📈 **Dados do Sistema**")
-                if hasattr(self.df, 'Ano'):  # Dados financeiros
-                    anos = self.df['Ano'].unique()
-                    st.success(f"✅ **{len(anos)} anos** de dados financeiros")
-                    st.info(f"📅 **Anos:** {', '.join(map(str, sorted(anos)))}")
-                else:  # Dados contábeis
-                    total_records = len(self.df)
-                    st.success(f"✅ **{total_records:,}** registros")
-            
-            st.markdown("---")
-            
-            # Dicas rápidas
-            st.markdown("### 💡 **Dicas**")
-            st.markdown("""
-            - **Formatos aceitos:** .xlsx, .xls
-            - **Tamanho máximo:** Recomendado até 10MB
-            - **Abas múltiplas:** Navegação automática por tabs
-            - **Performance:** Use o controle de linhas para arquivos grandes
-            """)
+        pass  # Seção removida para manter interface limpa
