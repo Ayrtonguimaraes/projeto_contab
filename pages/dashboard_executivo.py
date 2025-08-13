@@ -188,8 +188,14 @@ class DashboardExecutivoPage(BasePage):
             elif 'giro do ativo' in col_name.lower():
                 valor_formatado = f"{val_cur:.2f}"
             
-            # RENTABILIDADE - Porcentagens (26,27,28,30): %
-            elif any(x in col_name.lower() for x in ['margem líquida', 'roa', 'roe', 'dupont']):
+            # ROA e ROE (27,28): Porcentagem (valores já em decimal no CSV)
+            elif any(x in col_name.lower() for x in ['roa', 'roi']) and 'dupont' not in col_name.lower():
+                valor_formatado = f"{val_cur:.1%}"
+            elif 'roe' in col_name.lower():
+                valor_formatado = f"{val_cur:.1%}"
+            
+            # OUTRAS RENTABILIDADES - Porcentagens (26,30): %
+            elif any(x in col_name.lower() for x in ['margem líquida', 'dupont']):
                 valor_formatado = f"{val_cur:.1%}"
             
             # MULTIPLICADOR MAF (29): Número
