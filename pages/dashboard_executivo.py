@@ -164,8 +164,12 @@ class DashboardExecutivoPage(BasePage):
             
             # Formatação inteligente baseada no tipo de métrica e grandeza correta
             
+            # PRAZOS MÉDIOS E CICLOS (31-34): Dias - VERIFICAR PRIMEIRO!
+            if any(x in col_name.lower() for x in ['pmre', 'pmrv', 'pmpc', 'ciclo']):
+                valor_formatado = f"{val_cur:.0f} dias"
+            
             # DADOS BRUTOS (1-15): R$ Milhões
-            if any(x in col_name.lower() for x in ['ativo', 'patrimônio', 'passivo', 'receita', 'lucro', 'caixa', 'estoque', 'imobilizado', 'cpv', 'fornecedor', 'contas a receber', 'realizável']):
+            elif any(x in col_name.lower() for x in ['ativo', 'patrimônio', 'passivo', 'receita', 'lucro', 'caixa', 'estoque', 'imobilizado', 'cpv', 'fornecedor', 'contas a receber', 'realizável']):
                 # Valores monetários em milhões
                 if val_cur >= 1000:
                     valor_formatado = f"R$ {val_cur/1000:.1f}B"  # Bilhões
@@ -199,10 +203,6 @@ class DashboardExecutivoPage(BasePage):
             # PARTICIPAÇÃO DE CAPITAIS DE TERCEIROS (17): Número (Ex: 2,06)
             elif 'participação de capitais de terceiros' in col_name.lower():
                 valor_formatado = f"{val_cur:.2f}"
-            
-            # PRAZOS MÉDIOS E CICLOS (31-34): Dias
-            elif any(x in col_name.lower() for x in ['pmre', 'pmrv', 'pmpc', 'ciclo']):
-                valor_formatado = f"{val_cur:.0f} dias"
             
             else:
                 # Formato padrão para outros valores
