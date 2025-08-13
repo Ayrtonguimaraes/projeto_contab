@@ -168,7 +168,19 @@ class DashboardExecutivoPage(BasePage):
             if any(x in col_name.lower() for x in ['pmre', 'pmrv', 'pmpc', 'ciclo']):
                 valor_formatado = f"{val_cur:.0f} dias"
             
-            # DADOS BRUTOS (1-15): R$ Milhões
+            # GIRO DO ATIVO (25): Número (Ex: 0,45) - ESPECÍFICO - ANTES DOS DADOS BRUTOS!
+            elif col_name == 'Giro do Ativo (GA)':
+                valor_formatado = f"{val_cur:.2f}"
+            
+            # ROA (27): Porcentagem (%) - ESPECÍFICO - ANTES DOS DADOS BRUTOS!
+            elif col_name == 'Rentabilidade do Ativo (ROA ou ROI)':
+                valor_formatado = f"{val_cur:.1%}"
+            
+            # ROE (28): Porcentagem (%) - ESPECÍFICO - ANTES DOS DADOS BRUTOS!
+            elif col_name == 'Rentabilidade do Patrimônio Líquido (ROE) ':
+                valor_formatado = f"{val_cur:.1%}"
+            
+            # DADOS BRUTOS (1-15): R$ Milhões - DEPOIS DAS CONDIÇÕES ESPECÍFICAS!
             elif any(x in col_name.lower() for x in ['ativo', 'patrimônio', 'passivo', 'receita', 'lucro', 'caixa', 'estoque', 'imobilizado', 'cpv', 'fornecedor', 'contas a receber', 'realizável']):
                 # Valores monetários em milhões
                 if val_cur >= 1000:
@@ -183,18 +195,6 @@ class DashboardExecutivoPage(BasePage):
             # LIQUIDEZ (21-24): Números (Ex: 0,35)
             elif any(x in col_name.lower() for x in ['liquidez']):
                 valor_formatado = f"{val_cur:.2f}"
-            
-            # GIRO DO ATIVO (25): Número (Ex: 0,45) - ESPECÍFICO
-            elif col_name == 'Giro do Ativo (GA)':
-                valor_formatado = f"{val_cur:.2f}"
-            
-            # ROA (27): Porcentagem (%) - ESPECÍFICO  
-            elif col_name == 'Rentabilidade do Ativo (ROA ou ROI)':
-                valor_formatado = f"{val_cur:.1%}"
-            
-            # ROE (28): Porcentagem (%) - ESPECÍFICO
-            elif col_name == 'Rentabilidade do Patrimônio Líquido (ROE) ':
-                valor_formatado = f"{val_cur:.1%}"
             
             # OUTRAS RENTABILIDADES - Porcentagens (26,30): %
             elif any(x in col_name.lower() for x in ['margem líquida', 'dupont']):
