@@ -164,13 +164,15 @@ class DashboardExecutivoPage(BasePage):
             
             # Formatação inteligente baseada no tipo de métrica
             if any(x in col_name.lower() for x in ['ativo', 'patrimônio', 'passivo', 'receita', 'lucro', 'caixa', 'estoque', 'imobilizado', 'cpv', 'fornecedor', 'contas a receber', 'realizável']):
-                # Valores monetários (já estão em milhões no CSV)
-                # Exemplo: 1.124.797 no CSV = R$ 1.124.797 milhões = R$ 1,124 bilhão
-                if val_cur >= 1000:
-                    valor_formatado = f"R$ {val_cur/1000:.1f}B"  # Bilhões
-                elif val_cur >= 1:
+                # Valores monetários (valores no CSV estão em MILHÕES)
+                # Exemplo: 1.124.797 no CSV = R$ 1.124.797 milhões = R$ 1,124 trilhão
+                if val_cur >= 1000000:  # >= 1 trilhão
+                    valor_formatado = f"R$ {val_cur/1000000:.1f}T"  # Trilhões
+                elif val_cur >= 1000:  # >= 1 bilhão
+                    valor_formatado = f"R$ {val_cur/1000:.1f}B"  # Bilhões  
+                elif val_cur >= 1:  # >= 1 milhão
                     valor_formatado = f"R$ {val_cur:.0f}M"  # Milhões
-                else:
+                else:  # < 1 milhão
                     valor_formatado = f"R$ {val_cur*1000:.0f}K"  # Milhares
             elif any(x in col_name.lower() for x in ['ml', 'roe', 'roa', 'eg', 'pct', 'ce', 'gaf', 'lg', 'lc', 'ls', 'li', 'ga', 'impl', 'irnc']):
                 # Indicadores percentuais/proporcionais
