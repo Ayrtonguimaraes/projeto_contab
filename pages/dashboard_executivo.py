@@ -180,12 +180,16 @@ class DashboardExecutivoPage(BasePage):
             elif any(x in col_name.lower() for x in ['liquidez']):
                 valor_formatado = f"{val_cur:.2f}"
             
+            # GIRO DO ATIVO (25): Número (Ex: 0,45)
+            elif 'giro do ativo' in col_name.lower():
+                valor_formatado = f"{val_cur:.2f}"
+            
             # RENTABILIDADE - Porcentagens (26,27,28,30): %
             elif any(x in col_name.lower() for x in ['margem líquida', 'roa', 'roe', 'dupont']):
                 valor_formatado = f"{val_cur:.1%}"
             
-            # RENTABILIDADE - Números (25,29): Giro do Ativo, MAF
-            elif any(x in col_name.lower() for x in ['giro do ativo', 'multiplicador']):
+            # MULTIPLICADOR MAF (29): Número
+            elif 'multiplicador' in col_name.lower():
                 valor_formatado = f"{val_cur:.2f}"
             
             # ALAVANCAGEM (35-37): Números (Ex: 0,39, 6,36, 2,47)
